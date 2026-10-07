@@ -48,22 +48,54 @@ def _filters_from_request() -> dict:
     return filters
 
 
-def _search_options() -> tuple[str, int, bool, int]:
-    """从设置与查询串里取出检索参数。
+def _param(name: str):
+    """取参数：查询串优先，其次 POST 请求体。
 
-    查询串可以覆盖设置里的值——调用方临时想要更多结果时不必先去改配置。
+    **两种来源都要认**，和 ``_filters_from_request`` 保持同一套顺序。
+    之前 ``mode`` / ``limit`` / ``group_by_paper`` 只读查询串，而 ``q`` 和
+    筛选条件两种都读——同一个端点上「有的参数两种都认、有的只认查询串」
+    是最难排查的一类不一致：POST 一个 ``{"limit": 3}`` 会**静默地**
+    按设置里的默认值返回 8 条，调用方只会以为「这个接口不支持 limit」。
+
+    而这个端点提供 POST 的理由，恰恰就是让调用方把复杂条件放进请求体。
+    """
+    value = request.args.get(name)
+    if value is not None:
+        return value
+    return (request.get_json(silent=True) or {}).get(name)
+
+
+def _search_options() -> tuple[str, int, bool, int]:
+    """从设置与请求里取出检索参数。
+
+    请求可以覆盖设置里的值——调用方临时想要更多结果时不必先去改配置。
     """
     from flask import current_app
 
     settings = current_app.extensions["kb_settings"]
-    mode = request.args.get("mode") or "hybrid"
+
+    mode = str(_param("mode") or "hybrid")
     if mode not in {"hybrid", "fts", "vector"}:
         mode = "hybrid"
-    limit = request.args.get("limit", type=int) or int(settings.get("retrieval.top_k"))
+
+    raw_limit = _param("limit")
+    try:
+        limit = int(raw_limit) if raw_limit not in (None, "") else int(
+            settings.get("retrieval.top_k")
+        )
+    except (TypeError, ValueError):
+        # 传了非数字不该 500，退回默认值即可
+        limit = int(settings.get("retrieval.top_k"))
     limit = max(1, min(limit, 100))
-    group_by_paper = request.args.get("group_by_paper", type=lambda v: v.lower() == "true")
-    if group_by_paper is None:
+
+    raw_group = _param("group_by_paper")
+    if raw_group is None:
         group_by_paper = bool(settings.get("retrieval.group_by_paper"))
+    elif isinstance(raw_group, bool):
+        group_by_paper = raw_group
+    else:
+        group_by_paper = str(raw_group).lower() == "true"
+
     rrf_k = int(settings.get("retrieval.rrf_k"))
     return mode, limit, group_by_paper, rrf_k
 

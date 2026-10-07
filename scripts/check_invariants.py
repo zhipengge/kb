@@ -138,6 +138,69 @@ def _check_agent_docs_match_routes() -> int:
     return len(mentioned)
 
 
+def _check_static_agent_doc() -> int:
+    """``docs/agent-guide.md`` 里提到的端点都必须真实存在，**且方法对得上**。
+
+    上面那条检查只覆盖**动态**的 agent-guide 端点（服务端渲染的纯文本）。
+    而仓库里还有一份静态文档——它是给「服务还没跑起来」或「要直接塞进模型
+    上下文」的场景用的，同样会漂移，而且更容易：改路由的人根本不知道
+    md 文件里还抄了一份。
+
+    比动态那份多查一件事：**HTTP 方法**。写文档时实测踩到过——
+    路径全对，但把 ``PATCH /papers/<id>`` 写成了 ``PUT``，把集合端点
+    ``DELETE /notes`` 当成了存在（DELETE 只在 ``/notes/<id>`` 上）。
+    路径检查抓不到这两种错，而照着调的调用方会拿到 405 或 404。
+    """
+    import re
+    from pathlib import Path
+
+    from flask import current_app
+
+    doc = Path(current_app.root_path).parent / "docs" / "agent-guide.md"
+    if not doc.exists():
+        problems.append("docs/agent-guide.md 不存在（外部 agent 的使用文档）")
+        return 0
+
+    text = doc.read_text(encoding="utf-8")
+    by_shape: dict[str, set[str]] = {}
+    for rule in current_app.url_map.iter_rules():
+        shape = re.sub(r"<[^>]+>", "{}", str(rule.rule))
+        by_shape.setdefault(shape, set()).update(rule.methods - {"HEAD", "OPTIONS"})
+
+    # 先把 Markdown 的包裹符号去掉，否则方法名和路径会被它们隔开。
+    #
+    # **这一步不能省。** 表格里的写法是 `` `PUT`\|`DELETE /api/v1/...` ``，
+    # 反引号和 `\|` 夹在 `PUT` 与路径之间；正则要求方法与路径相邻，
+    # 于是 `PUT` 会被静默丢掉，只校验到 `DELETE`——而 DELETE 恰好是支持的，
+    # 检查就「通过」了。第一版就是这么写的，注入 `PUT /papers/<id>` 这种
+    # 真实错误时它毫无反应。**一个在常见写法下静默失效的守卫比没有更糟**：
+    # 它会让人以为这块被盯住了。
+    normalized = text.replace("`", "").replace("\\|", "|")
+
+    checked = 0
+    pattern = re.compile(
+        r"((?:GET|POST|PUT|PATCH|DELETE)(?:\s*[|/]\s*(?:GET|POST|PUT|PATCH|DELETE))*)?"
+        r"[\s|/]*?(/api/v1/[A-Za-z0-9_/<>.\-]+)",
+    )
+    for methods_str, path in pattern.findall(normalized):
+        path = path.rstrip(".,)")
+        shape = re.sub(r"<[^>]+>", "{}", path)
+        have = by_shape.get(shape)
+        if have is None:
+            problems.append(f"docs/agent-guide.md 提到了不存在的路径：{path}")
+            continue
+        checked += 1
+        if not methods_str:
+            continue
+        for method in re.findall(r"GET|POST|PUT|PATCH|DELETE", methods_str):
+            if method not in have:
+                problems.append(
+                    f"docs/agent-guide.md 写的是 {method} {path}，"
+                    f"但该端点实际只支持 {', '.join(sorted(have))}"
+                )
+    return checked
+
+
 def _check_mcp_tool_schemas() -> int:
     """MCP 工具表必须自洽。
 
@@ -183,6 +246,9 @@ def main() -> None:
 
         mentioned = _check_agent_docs_match_routes()
         print(f"  ✓ agent 指南里的 {mentioned} 个路径都真实存在")
+
+        static_checked = _check_static_agent_doc()
+        print(f"  ✓ 静态使用文档里的 {static_checked} 个端点与方法都真实存在")
 
         tools = _check_mcp_tool_schemas()
         print(f"  ✓ MCP 工具表自洽（{tools} 个工具）")

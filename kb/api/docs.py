@@ -218,7 +218,13 @@ def agent_guide():
     stdio:  python scripts/mcp_server.py       （客户端自己拉起，无需 Web 服务）
     HTTP:   POST {base}/api/v1/mcp            （JSON-RPC 2.0，需上面那个 Key）
 十个工具全部只读：search / read_paper / get_note / list_papers / list_notes /
-get_paper / get_code / list_tags / stats / ask。除了 ask 都不花钱。
+get_paper / get_code / list_tags / stats / ask。
+
+**关于花钱，别只看工具名。** 这里原先写的是「除了 ask 都不花钱」，是错的：
+`search` 本身不调模型，但服务端**默认开着查询扩展**（把中文提问翻成英文术语），
+那一步是一次轻量模型调用，实测约 1.6 秒、几百 token（同一查询词有缓存，
+重复查不再花）。`ask` 再贵一到两个数量级。其余八个工具不调用模型。
+
 下面这份 REST 说明是给「不支持 MCP」或需要写数据的场景用的。
 
 ## 核心调用范式：search → read → cite

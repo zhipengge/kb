@@ -50,6 +50,11 @@ curl -H "Authorization: Bearer kb_xxxxxxxx_..." \
 
 ## 接给外部 agent
 
+> **如果你是要「使用」这个知识库的 agent，直接读
+> [`docs/agent-guide.md`](docs/agent-guide.md)。**
+> 那份文档面向调用方：怎么鉴权、核心的 `search → read → cite` 范式、
+> 引用可信度三态、以及哪些调用要花钱。本节讲的是**怎么把它接起来**（给部署的人看）。
+
 两种方式，**按客户端挑一种即可**，不用都接。
 
 ### 一、MCP（推荐）
