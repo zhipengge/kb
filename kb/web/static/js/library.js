@@ -29,11 +29,37 @@ function applyView(view) {
   });
 }
 
+/* 窄屏（手机）一律用卡片视图。
+ *
+ * 列表视图是四列表格（标题 / 年份会议 / 标签 / 状态），在 390px 宽里
+ * 每格只剩几十像素，标题会被压成竖排单字——不是「不好看」，是读不了。
+ * 卡片视图本来就是自适应的，窄屏下每张卡占满一行，正好。
+ *
+ * 这里**不覆盖用户的存储偏好**：只在窄屏生效，回到宽屏仍是用户选的那个。
+ * 切换按钮同时也藏起来，免得点到一个当前无效的开关。
+ */
+const NARROW = '(max-width: 820px)';
+const narrow = window.matchMedia(NARROW);
+
+function applyResponsiveView(storedView) {
+  applyView(narrow.matches ? 'card' : storedView);
+  document.querySelectorAll('[data-view-set]').forEach((btn) => {
+    // 隐藏而不是禁用：手机上一整排无效控件只是占地方
+    btn.hidden = narrow.matches;
+  });
+}
+
 function init() {
   const buttons = document.querySelectorAll('[data-view-set]');
   if (!buttons.length) return;
 
-  applyView(readView());
+  applyResponsiveView(readView());
+
+  // MediaQueryList 的 change 只在**跨越断点**时触发，普通 resize 不会——
+  // 这正是想要的：用户在手机上手动切了视图，不会被随后的滚动/resize 打回去。
+  const onCross = () => applyResponsiveView(readView());
+  if (narrow.addEventListener) narrow.addEventListener('change', onCross);
+  else if (narrow.addListener) narrow.addListener(onCross);   // 老 Safari
 
   buttons.forEach((btn) => {
     btn.addEventListener('click', () => {

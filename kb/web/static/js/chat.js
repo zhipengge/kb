@@ -720,8 +720,15 @@ export function createChat(opts) {
 
   sendBtn?.addEventListener('click', send);
 
+  // 触屏设备上回车是「换行」——软键盘的回车键长在拇指正上方，
+  // 想换行却误发一条半截消息是这里最容易踩的坑（而且 Shift+回车在
+  // 手机软键盘上根本按不出来）。手机上发送统一交给发送按钮。
+  // 用 pointer:coarse 判断输入方式而不是屏幕宽度：平板外接键盘时仍该回车发送。
+  const isTouch = window.matchMedia('(pointer: coarse)').matches;
+
   inputEl.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+      if (isTouch) return;   // 交给默认行为：插入换行
       event.preventDefault();
       if (mentionEl && !mentionEl.hidden) return;  // 正在选论文，回车不发送
       send();

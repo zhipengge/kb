@@ -142,6 +142,9 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  /* 移动端浏览器地址栏会伸缩，100vh 恒等于「地址栏隐藏时」的高度，
+     于是页面底部永远差一截（内容被挡住或凭空多出滚动）。dvh 跟随实际视口。 */
+  min-height: 100dvh;
 }
 
 a { color: var(--accent); text-decoration: none; }
@@ -529,6 +532,7 @@ dl.kv dd { margin: 0; font-size: .88rem; }
   align-items: start;
   /* 减去页头与内边距，剩下的都给阅读区，让面板自己能滚动而不是整页滚动 */
   height: calc(100vh - 168px);
+  height: calc(100dvh - 168px);
   min-height: 420px;
 }
 
@@ -681,6 +685,7 @@ hr.sep {
 /* Vditor 需要一个有确定高度的容器，height:'100%' 才有意义 */
 .vditor-mount {
   height: calc(100vh - 330px);
+  height: calc(100dvh - 330px);
   min-height: 420px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm, 4px);
@@ -745,6 +750,7 @@ hr.sep {
   grid-template-columns: 252px minmax(0, 1fr);
   gap: var(--pad-sm);
   height: calc(100vh - 150px);
+  height: calc(100dvh - 150px);
   min-height: 480px;
 }
 
@@ -1251,7 +1257,11 @@ hr.sep {
 
 .facet-panel { position: sticky; top: calc(var(--pad) + 8px); }
 /* 标签多时侧栏自己滚，而不是把整页撑长——否则筛选条会被顶出视野 */
-.facet-scroll { max-height: calc(100vh - 300px); overflow: auto; }
+.facet-scroll {
+  max-height: calc(100vh - 300px);
+  max-height: calc(100dvh - 300px);
+  overflow: auto;
+}
 
 .facet-group { margin-bottom: var(--pad-sm); }
 .facet-dim {
@@ -1332,7 +1342,13 @@ hr.sep {
 @media (max-width: 820px) {
   .library-layout { grid-template-columns: 1fr; }
   .facet-panel { position: static; }
-  .facet-scroll { max-height: 240px; }
+  /* 手机上筛选面板在论文列表**上方**，占多高就把列表往下推多远。
+     240px 在 844px 高的屏上是四分之一屏，每次进文库都要先滚过它。
+     压到 30vh 以内，既还能翻到标签，又不至于把正文挤到屏幕外。
+     （更好的做法是折成一行的「筛选」抽屉，但那要动模板结构，另说。）
+     注意**不要**用 column-count 改多列：这个盒子已经限高且纵向滚动，
+     分列会横向溢出，反而把面板变成一个左右也能滚的怪东西。 */
+  .facet-scroll { max-height: min(30vh, 240px); }
 }
 
 /* 键盘提示 */
@@ -1360,4 +1376,190 @@ kbd {
   .workbench[data-right="collapsed"] { --wb-right: 1fr; }
   .workbench[data-left="collapsed"] .wb-panel-left,
   .workbench[data-right="collapsed"] .wb-panel-right { display: none; }
+}
+
+/* ==========================================================================
+   移动端适配
+
+   桌面端这套布局在手机上会同时踩三类坑，下面的规则按类别组织：
+
+   1. **装不下**——顶栏 7 个导航项在 390px 宽里大约要 400px，会撑出横向滚动条，
+      而横向滚动条一旦出现，整页左右晃，长文阅读基本就废了。
+   2. **按不准**——桌面上的按钮上下内边距只有 7px（约 30px 高），
+      手指点上去误差很大；苹果的建议是触控目标不小于 44×44。
+   3. **摸出来的怪毛病**——悬浮态在触屏上会「粘住」（点完卡片一直保持抬起效果），
+      输入框字号小于 16px 时 iOS 会在聚焦瞬间自动放大整个页面。
+
+   处理顺序：先解决装不下（否则后面的优化都白做），再处理触控尺寸，
+   最后是触屏特有的交互问题。
+   ========================================================================== */
+
+/* ---- 1. 顶栏：导航改成横向滚动条 ---- */
+/* 七个入口在手机上放不下。方案是**让导航自己横向滚**，而不是收进汉堡菜单：
+   收进菜单要多一个 JS 开关和一块遮罩，而且每次切换页面都多一次点击；
+   这里只有七个短标签，横滑一条和原生 App 的标签栏是一个手感。
+   关键是**整页不能跟着横向滚**——只让 .nav 内部滚。 */
+@media (max-width: 640px) {
+  .topbar {
+    gap: var(--pad-sm);
+    padding-left: max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
+  }
+  .nav {
+    /* min-width:0 是这里的关键：flex 子项默认 min-width:auto，
+       不肯收缩到内容宽度以下，于是容器被撑破、整页出现横向滚动。 */
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;   /* 滑到头不要带着整页一起弹 */
+    scrollbar-width: none;            /* 这条横滑是「手势」，滚动条是噪音 */
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav-link { scroll-snap-align: start; }
+  .topbar-actions { flex: 0 0 auto; }
+}
+
+/* ---- 2. 触控目标 ---- */
+/* 用 pointer:coarse 而不是宽度断点：平板也是手指操作，桌面触摸屏同理。
+   按设备**输入方式**判断比按屏幕尺寸判断更准。 */
+@media (pointer: coarse) {
+  .nav-link { padding: 9px 12px; }
+  .btn { min-height: 40px; }
+  .btn-ghost { min-width: 40px; }
+  .wb-tab { padding: 8px 14px; }
+  .facet-item { padding: 8px 9px; }
+  /* 卡片、列表项、标签这类可点区域整体抬高到 44px 左右。
+     标签在模板里渲染成 .badge，示例问句是 .example-chip（并没有 .tag-chip 这个类）。 */
+  .paper-card { padding: var(--pad-sm) var(--pad-sm); }
+  .badge, .example-chip { padding: 5px 10px; }
+  .example-chip { min-height: 40px; }
+}
+
+/* ---- 3. 输入框：字号必须 ≥16px ---- */
+/* iOS Safari 会在聚焦时**自动放大整个页面**来迁就小字号输入框，
+   而放大之后页面停在放大状态，用户得手动双击缩回去。
+   实测 .92rem（约 13.8px）就会触发。 */
+@media (max-width: 820px) {
+  input[type="text"], input[type="number"], input[type="password"],
+  input[type="url"], input[type="search"], input[type="email"],
+  select, textarea {
+    font-size: 16px;
+  }
+}
+
+/* ---- 4. 触屏上没有 hover ---- */
+/* 不加这段，点过的卡片会一直保留 translateY(-1px) 和强调色边框，
+   看起来像「选中了」，而其实只是悬浮态没被清掉。 */
+@media (hover: none) {
+  .paper-card:hover { transform: none; border-color: var(--border); }
+  .btn:hover { background: var(--bg-raised); }
+  .btn-primary:hover { background: var(--accent); border-color: var(--accent); }
+  .btn-ghost:hover { background: transparent; }
+  .nav-link:hover { background: none; }
+  .facet-item:hover { background: none; }
+  .wb-rail:hover { color: var(--text-muted); border-color: var(--border); }
+}
+
+/* ---- 5. 窄屏：把留白让给正文 ---- */
+@media (max-width: 640px) {
+  .content {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-bottom: calc(40px + env(safe-area-inset-bottom));
+  }
+  /* 「宽松」密度是给大屏调版面节奏用的，手机上只是白占宽度 */
+  [data-density="spacious"] { --pad: 14px; --pad-sm: 9px; }
+  [data-density="comfortable"] { --pad: 14px; --pad-sm: 9px; }
+  .footer { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/* 阅读区：手机上正文两侧的留白要更紧，行高放宽一点更好读 */
+@media (max-width: 640px) {
+  .wb-body-pad { padding: var(--pad-sm); }
+  .wb-reading { line-height: 1.75; }
+  .wb-reading p { margin: .7em 0; }
+  /* 长公式在窄屏上只能横向滚，硬折行会读不懂 */
+  .wb-reading .katex-display { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+  .wb-reading img { max-width: 100%; height: auto; }
+}
+
+/* ---- 6. PDF 阅读器 ---- */
+/* 页面本身已经默认「适应宽度」，这里只需处理工具栏：
+   它现在有 7 个控件 + 标题 + 折叠按钮，手机上必然挤出容器。
+   工具栏保持可横滑（已有 overflow-x:auto），再给它一点内边距让拨动更好点。 */
+@media (max-width: 820px) {
+  .reader-toolbar { gap: 2px; }
+  .reader-toolbar input[type="number"] { width: 46px; }
+  .reader-stage {
+    /* 触摸滚动更跟手，且滚动到边界不要带动整页 */
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding: 8px 4px;
+  }
+  /* 缩放按钮在手机上是多余的：页面已适应宽度，捏合就能缩放（见 reader.js） */
+  [data-reader-zoom-in], [data-reader-zoom-out], [data-reader-fit] { display: none; }
+  [data-reader-zoom] { display: none; }
+}
+
+/* ---- 7. 工作台堆叠后：彻底忽略「折叠」 ---- */
+@media (max-width: 900px) {
+  /* 折叠是给**左右并排**准备的：藏起一栏好让另一栏更宽。堆叠成上下之后
+     它没有意义——藏起一栏只是把内容从页面上抹掉，另一半并不会因此变宽。
+
+     更要紧的是它有**把人锁死**的路径：折叠状态存在 localStorage 里，
+     在电脑上折了笔记栏、再用手机打开同一篇论文，规则 1371 行会把面板
+     display:none，而唯一的展开入口（竖向把手 .wb-rail）同时又被我藏掉了，
+     连面板标题栏里那个折叠按钮也在被藏起来的面板内部——**再也没有入口能展开**。
+
+     所以这里不是「把把手藏起来」，而是把折叠状态整体作废：
+     两栏一律展开，折叠按钮和把手一起隐藏，用户不需要、也没法折叠。 */
+  .workbench[data-left="collapsed"],
+  .workbench[data-right="collapsed"] { --wb-left: 1fr; --wb-right: 1fr; }
+  .workbench[data-left="collapsed"] .wb-panel-left,
+  .workbench[data-right="collapsed"] .wb-panel-right {
+    display: flex;
+    opacity: 1;
+    pointer-events: auto;
+    overflow: hidden;
+  }
+  .wb-rail { display: none !important; }
+  /* 「折叠」和「聚焦」两类按钮都要藏：
+     data-wb-toggle 在面板标题栏里，data-wb-focus 在页头（聚焦=折叠另一侧）。
+     两者都会把某个面板变成 display:none，而在手机上折起来就展不开了。 */
+  [data-wb-toggle],
+  [data-wb-focus] { display: none; }
+  /* 上面这些同时也消掉了键盘快捷键的入口（[ 和 ]）——手机上本来也没有键盘。 */
+}
+
+/* ---- 8. 横向滚动容器：让触摸滑动更跟手 ---- */
+/* 表格与 Mermaid 图早就各自有滚动容器了（.table-scroll / .mermaid-scroll，
+   由 vditor-fix.js 在渲染后包上；阅读区的表格另有 display:block 兜底）。
+   这里**不再重复定义**，只补两点触屏手感：
+     * momentum 滚动，否则拖起来是一顿一顿的；
+     * 滚到尽头不要带着整页一起弹（overscroll-behavior）。 */
+.mermaid-scroll,
+.table-scroll,
+.wb-reading table,
+pre,
+.reader-stage,
+.chat-messages,
+.facet-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+/* 手机上的滚动条是纯噪音，占掉本就紧张的宽度 */
+@media (pointer: coarse) {
+  .mermaid-scroll::-webkit-scrollbar,
+  .table-scroll::-webkit-scrollbar { height: 4px; }
+}
+
+/* ---- 9. 会话页在手机上 ---- */
+@media (max-width: 820px) {
+  /* 输入框在触屏上会弹出软键盘，键盘占掉半屏后 64vh 的消息区只剩一点点，
+     用 dvh 让它跟着可视区缩，再留一点余量给输入框本身。 */
+  .chat-messages { max-height: 52dvh; }
+  /* 手机上回车是「换行」而不是「发送」更符合直觉，发送交给按钮；
+     这个行为在 chat.js 里按 pointer:coarse 判断。 */
+  .chat-input, .chat-composer textarea { font-size: 16px; }
 }

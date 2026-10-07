@@ -173,6 +173,82 @@ export function createReader(root, url) {
     });
   }
 
+  /* ---- 双指捏合缩放 ---- */
+  /*
+   * 桌面靠工具栏的 ＋/− 缩放，手机上那两个按钮在窄屏里被 CSS 隐藏了——
+   * 手指的直觉是捏合，不是去戳一个 40px 的按钮。
+   *
+   * 实现上分两段：捏合过程中**只改 CSS 尺寸**（画布位图不重画），
+   * 松手后再按最终倍率重画一次。原因是重画一页要几十毫秒，
+   * 跟着 touchmove 重画会卡成幻灯片；而拉伸位图是合成器的事，跟手。
+   * 代价是捏合途中画面偏糊，松手即清晰——这是各家阅读器的通行做法。
+   */
+  function bindPinch() {
+    let startDistance = 0;
+    let startScale = 1;
+    let liveScale = 1;      // 捏合过程中的当前倍率，松手时按它定稿
+    let pinching = false;
+
+    const distanceOf = (touches) => {
+      const [a, b] = touches;
+      return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    };
+
+    /** 捏合途中：按倍率拉伸已有的画布，不重新渲染。 */
+    const previewScale = (next) => {
+      liveScale = next;
+      const width = Math.round(baseWidth * next);
+      pages.forEach((entry) => {
+        entry.wrap.style.width = `${width}px`;
+        entry.wrap.style.height = `${Math.round(width / entry.ratio)}px`;
+        if (entry.rendered) {
+          // canvas 的位图尺寸不动，只改它的显示尺寸
+          entry.canvas.style.width = `${width}px`;
+          entry.canvas.style.height = `${Math.round(width / entry.ratio)}px`;
+        }
+      });
+      if (zoomLabel) zoomLabel.textContent = `${Math.round(next * 100)}%`;
+    };
+
+    stage.addEventListener('touchstart', (event) => {
+      if (event.touches.length !== 2) return;
+      pinching = true;
+      startDistance = distanceOf(event.touches);
+      // 从「当前实际显示倍率」起算，而不是从 scale 变量——
+      // 适应宽度模式下 scale 是上一次算出来的值，和眼前看到的不一定一致
+      startScale = clamp(pageSize() / baseWidth, MIN_SCALE, MAX_SCALE);
+      liveScale = startScale;
+    }, { passive: true });
+
+    stage.addEventListener('touchmove', (event) => {
+      if (!pinching || event.touches.length !== 2) return;
+      const distance = distanceOf(event.touches);
+      if (!startDistance) return;
+      previewScale(
+        clamp(startScale * (distance / startDistance), MIN_SCALE, MAX_SCALE),
+      );
+      // 阻止浏览器把这次捏合当成「缩放整个页面」。
+      // 监听器因此不能是 passive 的（注册时显式 passive:false）。
+      event.preventDefault();
+    }, { passive: false });
+
+    const finish = (event) => {
+      if (!pinching) return;
+      // 还有手指没离开就不算结束——两指先后抬起会触发两次，白重排一遍
+      if (event.touches && event.touches.length > 0) return;
+      pinching = false;
+      startDistance = 0;
+      // 按捏合结束时的倍率定稿，重画一次得到清晰画面
+      fitWidth = false;
+      scale = liveScale;
+      clearRendered();
+      applySize();
+      renderVisible();
+    };
+    stage.addEventListener('touchend', finish);
+    stage.addEventListener('touchcancel', finish);
+  }
+
   function watchScroll() {
     let ticking = false;
     stage.addEventListener('scroll', () => {
@@ -244,6 +320,7 @@ export function createReader(root, url) {
       pages.forEach((entry) => observer.observe(entry.wrap));
 
       bindToolbar();
+      bindPinch();
       watchScroll();
       setStatus('');
       renderPage(pages[0]);

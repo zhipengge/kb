@@ -16,7 +16,18 @@
       style="--font-reader: var(--font-{{ 'serif' if reader_font == 'serif' else 'sans' }})">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {# viewport-fit=cover 是给刘海屏用的：没有它，横屏时正文会被挖孔挡住，
+     而且 env(safe-area-inset-*) 恒为 0，CSS 里那些安全区留白全部失效。 #}
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, viewport-fit=cover">
+  {# 手机浏览器的地址栏会取这个颜色。**按应用主题给，不能按系统偏好给**：
+     应用里选了暗色、系统还是亮色时，地址栏会是刺眼的白条。 #}
+  {% if theme == 'system' %}
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f1116" media="(prefers-color-scheme: dark)">
+  {% else %}
+    <meta name="theme-color" content="{{ '#0f1116' if theme == 'dark' else '#ffffff' }}">
+  {% endif %}
   <title>{% block title %}知识库{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   {# KaTeX 样式。论文公式以原始 LaTeX 保存，靠它渲染成真正的数学排版。 #}
