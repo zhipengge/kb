@@ -49,7 +49,26 @@ function applyResponsiveView(storedView) {
   });
 }
 
+/* 手机上把标签筛选折起来。
+ *
+ * 模板里它是 `<details open>`，所以**没有这段脚本时行为就是展开的**——
+ * 也就是说脚本出错或没加载，用户看到的还是加这个功能之前的样子，
+ * 不会出现「筛选面板不见了」。这里只是主动把它收起来。
+ *
+ * 宽屏下强制展开（CSS 那边也把 summary 藏了），两边保持一致：
+ * 光标属性归 false 而 CSS 硬撑开，会让键盘/辅助技术的状态和眼睛看到的对不上。
+ */
+function applyFacetDisclosure() {
+  const details = document.querySelector('.facet-details');
+  if (!details) return;
+  details.open = !narrow.matches;
+}
+
 function init() {
+  // 放在下面那个 early return **之前**：筛选面板和视图切换按钮虽然总是同时
+  // 出现，但把折叠逻辑挂在按钮存在与否上，是没必要的耦合。
+  applyFacetDisclosure();
+
   const buttons = document.querySelectorAll('[data-view-set]');
   if (!buttons.length) return;
 
@@ -57,7 +76,10 @@ function init() {
 
   // MediaQueryList 的 change 只在**跨越断点**时触发，普通 resize 不会——
   // 这正是想要的：用户在手机上手动切了视图，不会被随后的滚动/resize 打回去。
-  const onCross = () => applyResponsiveView(readView());
+  const onCross = () => {
+    applyResponsiveView(readView());
+    applyFacetDisclosure();
+  };
   if (narrow.addEventListener) narrow.addEventListener('change', onCross);
   else if (narrow.addListener) narrow.addListener(onCross);   // 老 Safari
 

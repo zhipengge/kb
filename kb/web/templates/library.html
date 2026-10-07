@@ -62,6 +62,20 @@
   {# ==================== 左侧：标签分面 ==================== #}
   <aside class="facet-panel">
     <div class="card">
+      {# 手机上把筛选折成一行。
+         不加这层时，筛选面板在窄屏要占掉 min(30vh, 240px)——列表得从屏幕
+         三分之一处才开始，每次进文库都要先滚过它。
+         用原生 details 而不是自绘折叠：不需要 JS 也有正确语义（键盘可操作、
+         屏幕阅读器会读成「可展开」），而且默认 open，所以万一样式或脚本失效，
+         行为就退回今天的样子，不会把面板藏没了。 #}
+      <details class="facet-details" open>
+        <summary class="facet-summary">
+          <span>标签筛选</span>
+          {% if filters.tag_ids %}
+            <span class="badge">已选 {{ filters.tag_ids | length }}</span>
+          {% endif %}
+        </summary>
+        <div class="facet-body">
       <div class="card-head">
         <h3>标签</h3>
         {% if filters.tag_ids %}
@@ -114,6 +128,8 @@
           </div>
         {% endif %}
       </div>
+        </div>{# /.facet-body #}
+      </details>
     </div>
   </aside>
 
