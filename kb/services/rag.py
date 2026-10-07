@@ -98,7 +98,14 @@ WEB_TOOL_SCHEMA = {
                 "type": "string",
                 "description": (
                     "检索词。用**英文**效果最好（学术库与 GitHub 都以英文为主）。"
-                    "不要在检索词里写「最新」「2024 年」这类词，用具体术语。"
+                    "不要在检索词里写「最新」「2024 年」这类词，用具体术语。\n"
+                    "**只给平实的关键词，不要用搜索引擎语法。**"
+                    "这里接的是结构化 API（OpenAlex / Crossref / arXiv / GitHub / "
+                    "HackerNews），不是搜索引擎：``site:``、引号、``OR``、``-`` "
+                    "这类操作符它们不认，会把结果清空。"
+                    "想要某个来源的内容，改 ``kind`` 而不是写在检索词里——"
+                    "实测同一个问题，平实关键词能出 4 类来源，"
+                    "加上 ``site:news.ycombinator.com`` 就只剩 1 类。"
                 ),
             },
             "kind": {
@@ -106,14 +113,15 @@ WEB_TOOL_SCHEMA = {
                 "enum": ["paper", "code", "web", "auto"],
                 "description": (
                     "查哪一类来源。**选错只会浪费一轮**，但知道各自能查什么能省掉这轮：\n"
-                    "- paper：学术文献（OpenAlex / arXiv / Semantic Scholar）。问"
-                    "「这个方向有哪些工作」「某篇被谁引用了」「某个方法的研究现状」时用。\n"
+                    "- paper：学术文献（OpenAlex / Crossref / arXiv / Semantic Scholar）。"
+                    "问「这个方向有哪些工作」「某篇被谁引用了」「某个方法的研究现状」时用。\n"
                     "- code：GitHub **仓库**搜索，匹配的是**仓库名和描述**，"
                     "不是仓库里的代码。所以它适合问「某方法有没有开源实现」"
                     "「某方向的知名仓库」，**不适合**问「某函数怎么用」——"
                     "那类问题请选 web。\n"
-                    "- web：通用网页（官方文档、博客、issue 讨论）。"
-                    "问 API 用法、报错怎么解决、某工具怎么配置时用。\n"
+                    "- web：技术社区与讨论（HackerNews）+ 通用网页（需配置 Tavily Key）。"
+                    "问「外界怎么评价这项工作」「有没有人复现失败」「API 用法、"
+                    "报错怎么解决」时用。\n"
                     "- auto：不确定时用，会把启用的几类都查一遍。"
                 ),
             },
@@ -138,11 +146,16 @@ def _web_tool_spec(settings) -> tuple[list[dict], tuple[str, ...]]:
         kinds.append("paper")
     if settings.get("websearch.code"):
         kinds.append("code")
-    if settings.get("websearch.tavily_api_key"):
+    # web 这一类现在不只包含 Tavily：HackerNews 与 Stack Exchange 也在里面，
+    # 而它们不需要 Key。所以判定条件不能再只看 Tavily——
+    # 否则「没配 Tavily」会连累这两个免 Key 的源一起用不了，
+    # 而那正是「通用网页搜索没有 Key」时唯一还能用的东西。
+    #
+    # 取密钥必须用 has_secret()：secret 存的是密文，get() 拿到的是密文本身。
+    if settings.get("websearch.discussions") or settings.has_secret(
+        "websearch.tavily_api_key"
+    ):
         kinds.append("web")
-    # 没有 Tavily Key 时通用网页搜索不可用。这里**仍然把 web 留在可选范围之外**，
-    # 但模型如果明确要 web，会在工具结果里收到「未配置」的说明而不是空结果——
-    # 静默用别的源顶替，会得到一批看起来像答案的错东西。
 
     if not kinds:
         return [], ()
@@ -636,7 +649,10 @@ def answer(
         ctx.progress(0.85, "校验引用")
 
     # ---- 校验引用 ----
-    citations = verify_citations(response.text, hits)
+    # 清理被当成正文吐出来的工具调用标记，再拿去校验引用——
+    # 标记里可能夹着引用编号，先清掉才不会把噪声算进校验
+    response_text = strip_tool_markup(response.text)
+    citations = verify_citations(response_text, hits)
     # 「无从校验」不算不通过——只对「引文对不上」报警
     grounded = all(c.check != CHECK_MISMATCHED for c in citations) if citations else True
 
@@ -645,7 +661,7 @@ def answer(
         log.warning("回答中有 %d 条引用未能通过校验", bad)
 
     return RagAnswer(
-        answer=response.text,
+        answer=response_text,
         citations=citations,
         contexts=hits,
         model=response.model,
@@ -805,16 +821,28 @@ def answer_streaming(question: str, **kwargs):
             "message": "工具调用已达上限，下面是基于已查到内容的回答",
         }
         try:
+            # 这一轮**故意不给工具**（逼模型作答），而网关恰恰在这里最容易
+            # 把工具调用标记当正文吐出来——模型还想查，却没有工具可调。
+            # 所以这段必须过过滤器。
+            markup = ToolMarkupFilter()
             with budget.track("ask", ref=ref):
                 for event in provider.stream_text(messages, system=system, tools=None):
                     if event["type"] == "text":
-                        accumulated.append(event["text"])
-                        yield event
+                        visible = markup.feed(event["text"])
+                        if not visible:
+                            continue
+                        accumulated.append(visible)
+                        yield {**event, "text": visible}
                     elif event["type"] == "thinking":
                         yield event
                     elif event["type"] == "error":
                         yield event
                         break
+                # 把过滤器扣住的尾巴放出来，否则回答末尾会少几个字符
+                tail = markup.flush()
+                if tail:
+                    accumulated.append(tail)
+                    yield {"type": "text", "text": tail}
         except Exception as exc:
             log.warning("收尾调用失败：%s", exc)
 
@@ -824,7 +852,7 @@ def answer_streaming(question: str, **kwargs):
             accumulated.append(fallback)
             yield {"type": "text", "text": fallback}
 
-    full = "".join(accumulated)
+    full = strip_tool_markup("".join(accumulated))
     citations = verify_citations(full, hits)
     yield {
         "type": "done",
@@ -838,6 +866,118 @@ def answer_streaming(question: str, **kwargs):
     }
 
 
+# 全角竖线。某些网关（实测 DeepSeek 的 Anthropic 兼容端点）在模型"
+# 想调用工具、却没有可用的工具声明时，会把**工具调用标记当正文吐出来**，
+# 形如：全角竖线 x2 + DSML + 全角竖线 x2 + invoke name="web_search" ...
+#
+# 出现这种输出的典型场景：工具循环用光步数后，收尾那一轮**故意不带工具**
+# （见 answer_streaming 的 for...else），模型却还想再查一次，于是把调用
+# 意图编码成文本。不清理的话，用户会看到一整段尖括号标记。
+def _first_marker(text: str) -> int:
+    """第一个工具调用标记的位置，没有则返回 -1。"""
+    index = text.find(_DSML)
+    lowered = text.lower()
+    for opener in ("<invoke", "<parameter", "<tool_call", "<function_call"):
+        found = lowered.find(opener)
+        if found != -1 and (index == -1 or found < index):
+            index = found
+    return index
+
+
+def strip_tool_markup(text: str) -> str:
+    """去掉被当成正文吐出来的工具调用标记。
+
+    **从第一个标记起，把后面的内容整段丢掉**，而不是只删标记本身、留下正文。
+
+    理由是实测出来的：这段标记的内部，定界符会出现**很多次**——它是每一层
+    标签之间的分隔符，不是一对开闭括号。按「见到定界符就切换丢弃/保留」写，
+    会在层层标签之间来回翻转，把标签中间的内容当正文漏出去
+    （第一版就是那么错的，实测漏出了 ``invoke name=...`` 这类片段）。
+
+    而它出现时的真实形态是：模型整条回答都在尝试调用工具，里面并没有夹带
+    任何有用的话。所以整段丢掉既简单又准确；丢完若什么都不剩，
+    调用方会走「模型没有给出回答」的兜底，不会让用户对着空白猜。
+    """
+    if not text:
+        return ""
+    index = _first_marker(text)
+    if index == -1:
+        return text
+    return text[:index].rstrip()
+
+
+# 网关把工具调用当正文吐出来时用的分隔符（全角竖线夹着 DSML）。
+# 它同时是**开始和结束**的定界符，因此可以拿来当状态机的开关。
+_DSML = "｜｜DSML｜｜"
+
+class ToolMarkupFilter:
+    """流式路径的标记过滤器。
+
+    **为什么不能只在最后清理。** 流式回答是一段段 yield 给前端的，前端边收边渲染；
+    等最后再 replace 已经晚了——用户屏幕上那段标记早就出现了。
+
+    麻烦在于标记会被切碎：``｜｜DS`` 和 ``ML｜｜`` 可能落在相邻两个 chunk 里。
+    所以这里是个**状态机**：一旦看到起始定界符就进入「丢弃」状态，
+    一直丢到遇上下一个定界符加 ``>`` 为止，中途来的数据一律不发。
+
+    第一版不是这么写的——当时只判断「缓冲区结尾是不是定界符的前缀」，
+    结果标记一旦超过前缀长度就不再匹配，半截标记照样发了出去。
+    实测那条路在「跨 chunk」这一项上是失败的，所以改成状态机。
+    """
+
+    def __init__(self) -> None:
+        self._buf = ""
+        self._dropping = False
+
+    def _safe_prefix(self) -> int:
+        """不进入标记状态时，结尾有多少字符要扣住以防定界符被切开。"""
+        # 只可能被切开的是定界符的前缀，以及它前面的那个 '<'
+        for size in range(min(len(self._buf), len(_DSML) + 1), 0, -1):
+            tail = self._buf[-size:]
+            if _DSML.startswith(tail) or ("<" + _DSML).startswith(tail):
+                return size
+        return 0
+
+    def feed(self, delta: str) -> str:
+        """吃进一个 delta，返回**可以安全发给前端**的部分。"""
+        if not delta:
+            return ""
+        if self._dropping:
+            # 已经进入标记，这一轮剩下的全部丢弃
+            return ""
+
+        self._buf += delta
+        index = _first_marker(self._buf)
+        if index != -1:
+            # 标记开始：它之前的内容照发，之后的一律不要了
+            head = self._buf[:index]
+            if head.endswith("<"):
+                head = head[:-1]
+            self._buf = ""
+            self._dropping = True
+            return head
+
+        # 没看到标记，但结尾可能是被切开的标记前缀——扣住不发，等下个 chunk
+        hold = self._safe_prefix()
+        cut = len(self._buf) - hold
+        ready, self._buf = self._buf[:cut], self._buf[cut:]
+        return ready
+
+    def flush(self) -> str:
+        """收尾。
+
+        仍在丢弃状态说明这段标记没写完就结束了。**仍然不发**——把它当正文
+        放出去才是真正的错误（用户会看到半截尖括号）。丢掉顶多少几个字符，
+        而且调用方还有「模型没有给出回答」的兜底。
+        """
+        rest, self._buf = self._buf, ""
+        if self._dropping:
+            self._dropping = False
+            return ""
+        self._dropping = False
+        return rest
+
+
 __all__ = [
     "CHECK_MISMATCHED",
     "CHECK_UNVERIFIED",
@@ -847,5 +987,6 @@ __all__ = [
     "answer",
     "answer_streaming",
     "build_context",
+    "strip_tool_markup",
     "verify_citations",
 ]

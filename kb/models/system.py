@@ -255,7 +255,9 @@ __all__ = [
     "AuditLog",
     "Job",
     "JobEvent",
+    "LLMUsage",
     "Setting",
+    "WebSearchCache",
 ]
 
 
@@ -295,3 +297,42 @@ class LLMUsage(IdMixin, TimestampMixin, Base):
     blocked: Mapped[bool] = mapped_column(default=False)
 
     __table_args__ = (Index("ix_llm_usage_kind_created", "kind", "created_at"),)
+
+
+# --------------------------------------------------------------------------
+# 联网检索缓存
+# --------------------------------------------------------------------------
+
+
+class WebSearchCache(IdMixin, TimestampMixin, Base):
+    """一次联网检索的完整结果。
+
+    **为什么值得缓存。** 三个原因，都是实测出来的：
+
+    1. 这些接口本身就抖——实测 OpenAlex 同一小时内先返回 200、后超时，
+       StackExchange 三次里失败一次。缓存让「某个源正在抖的时候」
+       仍然有结果可给。
+    2. 抓正文（``fetch_pages``）是整个链路最慢的一步，一次一页 HTTP +
+       trafilatura 抽取。而 agent 通过 MCP 调 ``search`` 时**重复查询很常见**。
+    3. 联网结果几分钟内不会变，重复打网络纯属浪费。
+
+    存的是**完整结果**（含 ``content`` 与 ``extra``），不是给前端看的那几个字段——
+    见 ``services/websearch.py`` 里 ``_serialize`` 的说明。
+    """
+
+    __tablename__ = "web_search_cache"
+
+    # query + kinds + limit + fetch_pages 的哈希。不把这些都算进去会串味：
+    # 同一个问句用不同 kinds 得到的是完全不同的结果。
+    key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+
+    payload: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # 注意：SQLite **不存时区**，写进去的 aware datetime 读回来是 naive 的，
+    # 而存的确实是 UTC 值（不转本地时）。所以比较时不能直接和 utcnow() 比，
+    # 要用 services/websearch.py 里的 _as_naive_utc() 统一口径——
+    # 直接比会抛 TypeError: can't compare offset-naive and offset-aware datetimes，
+    # 而那个异常会被缓存的容错逻辑吞掉，表现为「缓存永远不命中、却查不出错」。
+    # timezone=True 在 SQLite 上是空操作，加了也没用。
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
+
+    __table_args__ = (UniqueConstraint("key", name="uq_web_search_cache_key"),)

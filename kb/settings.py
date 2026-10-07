@@ -375,17 +375,26 @@ _DEFS: list[SettingDef] = [
     ),
     SettingDef(
         "websearch.academic", "bool", True, "检索学术文献", "websearch",
-        "接 OpenAlex / Semantic Scholar / arXiv，查某方向的论文、引用关系。"
-        "**不需要 API Key。**",
+        "接 OpenAlex / Crossref / arXiv / Semantic Scholar，查某方向的论文、"
+        "引用关系与正式发表版本。**不需要 API Key。**"
+        "几个源会互相印证：同一篇工作被多个源返回时排序会提前。",
     ),
     SettingDef(
         "websearch.code", "bool", True, "检索代码仓库", "websearch",
         "接 GitHub 搜索，查某个方法在别的仓库里怎么实现的。不需要 Key。",
     ),
     SettingDef(
+        "websearch.discussions", "bool", True, "检索社区讨论", "websearch",
+        "接 HackerNews。**不需要 Key。**"
+        "论文告诉你作者声称什么，讨论区告诉你同行信不信、有没有人复现失败——"
+        "这是学术接口给不了的信息。",
+    ),
+    SettingDef(
         "websearch.tavily_api_key", "secret", "", "Tavily API Key", "websearch",
         "通用网页搜索（官方文档、技术博客、issue 讨论）需要它。"
-        "**留空则跳过通用网页检索**，学术与代码检索不受影响。",
+        "**留空则跳过通用网页检索**，学术、代码与讨论检索不受影响。"
+        "（实测这个网络环境下，免 Key 的通用搜索都不可用："
+        "DuckDuckGo / Brave / SearXNG 的 TLS 握手超时，Mojeek 返回验证码页。）",
     ),
     SettingDef(
         "websearch.max_results", "int", 6, "每次返回条数", "websearch",
@@ -399,6 +408,14 @@ _DEFS: list[SettingDef] = [
     SettingDef(
         "websearch.max_page_chars", "int", 4000, "单页正文上限（字符）", "websearch",
         minimum=500, maximum=20000, advanced=True,
+    ),
+    SettingDef(
+        "websearch.cache_ttl_minutes", "int", 60, "检索结果缓存（分钟）", "websearch",
+        "同一查询在这么多分钟内直接复用上次结果，不再联网。"
+        "联网结果几分钟内不会变，而抓正文是整个链路最慢的一步；"
+        "几个源本身也会抖（实测 OpenAlex 会间歇性超时），缓存让它们在抖的时候仍有结果。"
+        "**设为 0 关闭。**",
+        minimum=0, maximum=10080,
     ),
 
     # ---------------- 笔记 ----------------

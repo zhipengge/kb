@@ -205,6 +205,26 @@ def register_cli(app: Flask) -> None:
             f"完成：重建 {result['notes']} 篇 -> {result['chunks']} 块", fg="green"
         )
 
+    @kb_group.command("web-cache")
+    @click.option("--clear", is_flag=True, help="清空缓存（默认只显示状态）")
+    def web_cache(clear: bool) -> None:
+        """查看或清空联网检索缓存。"""
+        # 过期判断交给服务层，不要在 CLI 里写 SQL 比较时间——
+        # SQLite 存的是 naive UTC，拿 utcnow() 去 filter 会因时区问题算错
+        from .services.websearch import cache_stats, clear_cache
+
+        stats = cache_stats()
+        click.echo(
+            f"联网检索缓存：{stats['total']} 条"
+            f"（未过期 {stats['alive']}，已过期 {stats['expired']}）"
+        )
+        if not stats["total"]:
+            click.echo("  （还没有缓存。联网检索一次之后就会有。）")
+
+        if clear:
+            removed = clear_cache()
+            click.secho(f"已清空 {removed} 条", fg="green")
+
     # ------------------------------------------------------------------
     # 任务
     # ------------------------------------------------------------------

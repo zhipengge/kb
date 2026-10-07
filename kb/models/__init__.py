@@ -67,6 +67,7 @@ from .system import (
     JobEvent,
     LLMUsage,
     Setting,
+    WebSearchCache,
 )
 from .tag import (
     DIM_METHOD,
@@ -139,6 +140,7 @@ __all__ = [
     "Tag",
     "TagSuggestion",
     "TimestampMixin",
+    "WebSearchCache",
     "new_id",
     "utcnow",
 ]
