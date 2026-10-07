@@ -205,6 +205,33 @@ def register_cli(app: Flask) -> None:
             f"完成：重建 {result['notes']} 篇 -> {result['chunks']} 块", fg="green"
         )
 
+    @kb_group.command("graph")
+    @click.option("--build", is_flag=True, help="从笔记重建知识图谱（调模型，按篇计费）")
+    @click.option("--limit", type=int, default=0, help="只处理前 N 篇")
+    def graph_cmd(build: bool, limit: int) -> None:
+        """知识图谱：查看规模，或从笔记重建。"""
+        from .services import graph
+
+        if build:
+            click.echo("正在从笔记抽取实体与关系…")
+            result = graph.build(limit=limit)
+            click.secho(
+                f"完成：{result['ok']} 篇成功，{result['failed']} 篇失败", fg="green"
+            )
+
+        s = graph.stats()
+        click.echo()
+        click.echo(f"  实体      {s['entities']:,}")
+        click.echo(f"  关系      {s['relations']:,}（其中带证据 {s['with_evidence']:,}）")
+        click.echo(f"  论文关联  {s['paper_links']:,}")
+
+        top = graph.top_entities(limit=12)
+        if top:
+            click.echo()
+            click.secho("  被最多论文提到的实体", bold=True)
+            for item in top:
+                click.echo(f"    {item['papers']:3} 篇  [{item['type']:8}] {item['name'][:44]}")
+
     @kb_group.command("web-cache")
     @click.option("--clear", is_flag=True, help="清空缓存（默认只显示状态）")
     def web_cache(clear: bool) -> None:

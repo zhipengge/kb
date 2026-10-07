@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}知识图谱 · 知识库{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>知识图谱</h1>
+    <p>
+      谁用了什么、改进了什么、在哪个数据集上评测。
+      <b>每条关系都带出处</b>——没有出处的边不会出现在这里。
+    </p>
+  </div>
+</div>
+
+<div class="grid grid-4" style="margin-bottom:var(--pad)">
+  <div class="card stat-card">
+    <div class="stat-value">{{ '{:,}'.format(stats.entities) }}</div>
+    <div class="stat-label">实体</div>
+  </div>
+  <div class="card stat-card">
+    <div class="stat-value">{{ '{:,}'.format(stats.relations) }}</div>
+    <div class="stat-label">关系</div>
+  </div>
+  <div class="card stat-card">
+    <div class="stat-value">{{ '{:,}'.format(stats.with_evidence) }}</div>
+    <div class="stat-label">带证据</div>
+  </div>
+  <div class="card stat-card">
+    <div class="stat-value">{{ '{:,}'.format(stats.paper_links) }}</div>
+    <div class="stat-label">论文关联</div>
+  </div>
+</div>
+
+{% if stats.entities == 0 %}
+  <div class="card"><div class="empty">
+    图谱还是空的。跑 <span class="mono">flask kb graph --build</span> 从笔记里抽取
+    （会调用模型，按篇计费）。
+  </div></div>
+{% else %}
+
+<div class="grid" style="grid-template-columns: minmax(240px, 320px) minmax(0, 1fr)">
+  <div class="card">
+    <div class="card-head"><h3>提到最多的实体</h3></div>
+    <div class="facet-scroll" style="max-height:60vh">
+      {% for e in entities %}
+        <a class="facet-item {{ 'is-selected' if entity and entity.id == e.id else '' }}"
+           href="{{ url_for('web.graph_entity_page', entity_id=e.id) }}">
+          <span class="facet-name">{{ e.name }}</span>
+          <span class="facet-count">{{ e.papers }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div>
+    {% if entity %}
+      <div class="card">
+        <div class="card-head">
+          <h3>
+            {{ entity.name }}
+            <span class="badge">{{ entity.type }}</span>
+          </h3>
+        </div>
+        {% if entity.aliases %}
+          <div class="small faint" style="margin-bottom:var(--pad-sm)">
+            别名：{{ entity.aliases | join('、') }}
+          </div>
+        {% endif %}
+
+        {% macro edge_list(rows, title) %}
+          {% if rows %}
+            <h4 style="margin:var(--pad-sm) 0 6px">{{ title }}</h4>
+            {% for r in rows %}
+              <div style="padding:8px 0; border-top:1px solid var(--border)">
+                <div class="small">
+                  {% if r.direction == 'out' %}{{ entity.name }} →{% else %}← {{ entity.name }}{% endif %}
+                  <b>{{ r.type }}</b>
+                  <a href="{{ url_for('web.graph_entity_page', entity_id=r.other_id) }}">{{ r.other_name }}</a>
+                  {% if r.weight > 1 %}<span class="badge">{{ r.weight|int }} 篇支持</span>{% endif %}
+                </div>
+                {% for ev in r.evidence %}
+                  <div class="small faint" style="margin-top:3px">
+                    「{{ ev.quote }}」
+                  </div>
+                {% endfor %}
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endmacro %}
+
+        {{ edge_list(entity.out, '它指向') }}
+        {{ edge_list(entity['in'], '指向它') }}
+
+        {% if not entity.out and not entity['in'] %}
+          <div class="empty">这个实体还没有关系。</div>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="card"><div class="empty">
+        从左边选一个实体，看它的关系与出处。
+      </div></div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

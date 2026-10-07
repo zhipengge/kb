@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 
 from flask import (
+    abort,
     current_app,
     flash,
     jsonify,
@@ -903,6 +904,35 @@ def notes_sync_view():
 # --------------------------------------------------------------------------
 # 标签
 # --------------------------------------------------------------------------
+
+
+@web_bp.get("/graph")
+def graph_page():
+    """知识图谱：谁用了什么、改进了什么、在什么上评测。"""
+    from ..services import graph
+
+    return render_template(
+        "graph.html",
+        stats=graph.stats(),
+        entities=graph.top_entities(limit=60),
+        entity=None,
+    )
+
+
+@web_bp.get("/graph/entity/<entity_id>")
+def graph_entity_page(entity_id: str):
+    """单个实体的全部关系与出处。"""
+    from ..services import graph
+
+    detail = graph.entity_detail(entity_id)
+    if detail is None:
+        abort(404)
+    return render_template(
+        "graph.html",
+        stats=graph.stats(),
+        entities=graph.top_entities(limit=60),
+        entity=detail,
+    )
 
 
 @web_bp.get("/review")
