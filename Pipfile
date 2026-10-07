@@ -1,0 +1,70 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+# ---------------------------------------------------------------------------
+# kb — 论文知识库系统
+#
+# 设计约束（见 docs/ 与 README）：
+#   * 运行环境无 gcc/make —— 所有依赖必须提供预编译 wheel（已在 Python 3.14 上核对）
+#   * 不引入 Redis / Celery / 独立向量库等外部服务进程
+#   * 中文检索使用 SQLite 内置 FTS5 trigram，刻意不引入 jieba（停更于 2020，3.14 上有风险）
+# ---------------------------------------------------------------------------
+
+[packages]
+# --- Web 框架与基础设施 ---
+flask = "*"              # app factory + Jinja2 SSR，整个 Web 层
+flask-sqlalchemy = "*"   # ORM
+flask-migrate = "*"      # Alembic 迁移
+flask-wtf = "*"          # 表单 CSRF 防护
+flask-limiter = "*"      # API 限流（内存存储，无 Redis）
+python-dotenv = "*"      # .env 加载
+gunicorn = "*"           # 生产 WSGI；SSE 需要 gthread worker
+
+# --- LLM ---
+anthropic = "*"          # Claude 官方 SDK：流式、提示缓存、结构化输出、Files/Batches
+openai = "*"             # 仅用于 OpenAI 兼容适配器（DeepSeek/Qwen/vLLM/Ollama）
+pydantic = "*"           # 结构化抽取的 schema 定义
+
+# --- 文档解析与入库 ---
+pymupdf = "*"            # PDF 文本/图/元数据抽取（注意：AGPL 许可，见 README）
+pymupdf4llm = "*"        # PDF -> Markdown，专为喂给 LLM 设计（同 AGPL）
+pdfplumber = "*"         # 表格抽取（MIT，作为 PyMuPDF 的补充）
+httpx = "*"              # URL 抓取（含 arXiv 源码包下载）
+trafilatura = "*"        # 网页正文提取（链接入库）
+# LaTeX 源码解析：arXiv 论文优先走源码而不是 PDF。
+# 源码里章节、公式、图表标题、参考文献都是显式的，比从 PDF 反推结构可靠得多。
+# 两者都是纯 Python，无需编译器。
+pylatexenc = "*"         # LaTeX 文本 -> Unicode（处理重音、符号、特殊宏）
+texsoup = "*"            # LaTeX 结构解析（\section、\begin{equation} 等）
+
+# --- 存储与检索 ---
+sqlite-vec = "*"         # SQLite 内嵌向量索引，与元数据同库
+numpy = "*"              # 向量运算 + 暴力检索降级路径
+
+# --- 渲染与文本处理 ---
+markdown-it-py = "*"     # Markdown -> HTML
+mdit-py-plugins = "*"    # 表格/脚注/任务列表等插件
+nh3 = "*"                # HTML 消毒（bleach 已废弃）
+pygments = "*"           # 代码块语法高亮
+pyyaml = "*"             # 笔记 YAML frontmatter 读写
+rapidfuzz = "*"          # 标题模糊去重、代码仓库匹配
+
+# --- 安全与媒体 ---
+cryptography = "*"       # API Key 静态加密（Fernet）
+pillow = "*"             # 论文插图缩略图
+
+# --- 图谱（算法与社区发现）---
+networkx = "*"
+defusedxml = "*"
+fastembed = "*"
+
+[dev-packages]
+pytest = "*"
+pytest-cov = "*"
+ruff = "*"
+watchdog = "*"           # 笔记目录监听（默认关闭的可选能力）
+
+[requires]
+python_version = "3.14"
