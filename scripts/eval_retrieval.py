@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -52,10 +53,30 @@ CASES: list[tuple[str, str | None, str]] = [
 ]
 
 
-def run_round(verbose: bool) -> list[tuple[str, str | None, str | None, list[str]]]:
+def _load_generated() -> list[tuple[str, str | None, str]]:
+    """加载 ``gen_eval_set.py`` 生成的大评测集（有就用，没有就跳过）。
+
+    手写那 10 道题保留：它们是跨版本可比的那把尺子，不能因为有了更大的集合
+    就丢掉——新集合换了题面，分数不可直接和历史的比。
+    """
+    path = Path(__file__).resolve().parent / "eval_questions.json"
+    if not path.exists():
+        return []
+    try:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    return [
+        (row["question"], row.get("expect"), f"生成-{row.get('kind', '?')}")
+        for row in rows
+        if row.get("question") and row.get("expect")
+    ]
+
+
+def run_round(verbose: bool, cases) -> list[tuple[str, str | None, str | None, list[str]]]:
     """跑一轮，返回 [(问题, 期望, 实际 top1, top3 标题列表)]。"""
     results = []
-    for question, expected, kind in CASES:
+    for question, expected, kind in cases:
         hits = search(question, limit=3)
         titles = [(h.paper_title or "") for h in hits]
         top1 = titles[0] if titles else None
@@ -101,9 +122,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="检索质量评测")
     parser.add_argument("--rounds", type=int, default=2, help="跑几轮（默认 2，用于观察随机性）")
     parser.add_argument("-v", "--verbose", action="store_true", help="打印每条结果的来源通道")
+    parser.add_argument("--hand-only", action="store_true", help="只用那 10 道手写题（与历史分数可比）")
     args = parser.parse_args()
 
     app = create_app()
+    generated = [] if args.hand_only else _load_generated()
+    cases = CASES + generated
+    if generated:
+        print(f"评测集：手写 {len(CASES)} 道 + 生成 {len(generated)} 道 = {len(cases)} 道")
+    else:
+        print(f"评测集：手写 {len(CASES)} 道（生成集不存在，跑 gen_eval_set.py 可扩容）")
+
     rounds = []
     with app.app_context():
         for index in range(args.rounds):
@@ -111,7 +140,7 @@ def main() -> None:
             # 看起来「完全一致」，实际是把随机性藏起来了
             query_expand.clear_cache()
             print(f"\n{'=' * 72}\n第 {index + 1} 轮", flush=True)
-            rounds.append(run_round(args.verbose))
+            rounds.append(run_round(args.verbose, cases))
 
     print(f"\n{'=' * 72}\n结果")
     print(f"{'轮次':<6}{'点名Top1':<12}{'点名Top3':<12}{'概念有结果':<12}")

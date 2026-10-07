@@ -1,0 +1,822 @@
+[
+ {
+  "question": "What kind of learned representation fuses multi-sensor data, semantic cues, and temporal dynamics so a vehicle can anticipate how a traffic scene will unfold and support safe decision-making?",
+  "expect": "A Survey of World Models for Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "Which four data representations are used in the proposed taxonomy to group the methods that generate future physical scenes?",
+  "expect": "A Survey of World Models for Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "When a perception module hands off a decoded vectorized road layout to a motion forecasting module, what change lets the forecaster instead exploit the un-decimated internal scene representation and run faster?",
+  "expect": "Accelerating Online Mapping and Behavior Prediction via Direct BEV Feature Attention",
+  "kind": "concept"
+ },
+ {
+  "question": "On nuScenes, how much did end-to-end inference time drop when the downstream trajectory module read the internal top-down tensor instead of the vectorized road layout?",
+  "expect": "Accelerating Online Mapping and Behavior Prediction via Direct BEV Feature Attention",
+  "kind": "detail"
+ },
+ {
+  "question": "What framework learns a deep generative model and a corresponding inference network by maximizing a lower bound on the data likelihood?",
+  "expect": "An Introduction to Variational Autoencoders",
+  "kind": "concept"
+ },
+ {
+  "question": "What transformation allows the stochastic sampling of latent variables to be differentiable with respect to the parameters of the generative model?",
+  "expect": "An Introduction to Variational Autoencoders",
+  "kind": "detail"
+ },
+ {
+  "question": "自动驾驶采集的街道视频里车辆在动、背景不动，怎样才能在半小时内训好、达到实时渲染，并且能把某一辆车单独拆出来编辑？",
+  "expect": "Street Gaussians: Modeling Dynamic Urban Scenes with Gaussian Splatting",
+  "kind": "concept"
+ },
+ {
+  "question": "用点云表示每辆前景车时，随时间变化的外观具体是用什么形式的球谐函数来参数化的？",
+  "expect": "Street Gaussians: Modeling Dynamic Urban Scenes with Gaussian Splatting",
+  "kind": "detail"
+ },
+ {
+  "question": "How can a real-time point-based renderer keep road and sky regions visually consistent across viewpoints when it is fitted to only a sparse set of street-level camera images?",
+  "expect": "AutoSplat: Constrained Gaussian Splatting for Autonomous Driving Scene Reconstruction",
+  "kind": "concept"
+ },
+ {
+  "question": "How does the method supervise the unseen back side of a moving foreground object so that it stays consistent with the visible side?",
+  "expect": "AutoSplat: Constrained Gaussian Splatting for Autonomous Driving Scene Reconstruction",
+  "kind": "detail"
+ },
+ {
+  "question": "如何在不依赖精确物体位姿标注的情况下，让自动驾驶仿真器从真实驾驶视频中学习移动物体的连续运动，并在自由视角下正确渲染它们？",
+  "expect": "BézierGS: Dynamic Urban Scene Reconstruction with Bézier Curve Gaussian Splatting",
+  "kind": "concept"
+ },
+ {
+  "question": "论文在训练时除了对移动物体的渲染结果施加额外监督外，还引入了什么约束来保证不同运动路径之间的一致性？",
+  "expect": "BézierGS: Dynamic Urban Scene Reconstruction with Bézier Curve Gaussian Splatting",
+  "kind": "detail"
+ },
+ {
+  "question": "How can a generative model with continuous hidden variables be trained efficiently on a large dataset when its posterior over those hidden variables cannot be computed exactly?",
+  "expect": "Auto-Encoding Variational Bayes",
+  "kind": "concept"
+ },
+ {
+  "question": "For a Gaussian approximate posterior, how do you express a sampled latent code as a differentiable function of its mean and standard deviation and an independent noise draw?",
+  "expect": "Auto-Encoding Variational Bayes",
+  "kind": "detail"
+ },
+ {
+  "question": "为什么在驾驶场景普遍简单的数据集上训练出来的轨迹规划模型，会倾向于只用车辆自身的运动历史来外推未来路径，而几乎不看感知模块的输出？",
+  "expect": "Is Ego Status All You Need for Open-Loop End-to-End Autonomous Driving?",
+  "kind": "concept"
+ },
+ {
+  "question": "论文里那个用来判断预测轨迹是否贴合道路、弥补现有评测指标不足的新评价量，具体是按什么规则计算的？",
+  "expect": "Is Ego Status All You Need for Open-Loop End-to-End Autonomous Driving?",
+  "kind": "detail"
+ },
+ {
+  "question": "有没有一种生成模型，能把激光雷达与环视相机的观测压进同一个紧凑的共享表示，再按车辆动作条件地预测未来若干帧的传感器观测？",
+  "expect": "BEVWorld: A Multimodal World Simulator for Autonomous Driving via Scene-Level BEV Latents",
+  "kind": "concept"
+ },
+ {
+  "question": "解码器是用什么渲染方式把共享表示同时还原成点云和环视图像的？",
+  "expect": "BEVWorld: A Multimodal World Simulator for Autonomous Driving via Scene-Level BEV Latents",
+  "kind": "detail"
+ },
+ {
+  "question": "Is there a text generation method that keeps the parallel decoding of iterative denoising while also allowing variable-length outputs and faster inference through caching?",
+  "expect": "Block Diffusion: Interpolating Between Autoregressive and Diffusion Language Models",
+  "kind": "concept"
+ },
+ {
+  "question": "How are the noise levels during training selected so as to minimize the variance of the gradient estimator?",
+  "expect": "Block Diffusion: Interpolating Between Autoregressive and Diffusion Language Models",
+  "kind": "detail"
+ },
+ {
+  "question": "When the query set is split by time step, which queries get fused back into the perception branch and which ones are routed to the motion decoder?",
+  "expect": "Bridging Past and Future: End-to-End Autonomous Driving with Historical Prediction and Planning",
+  "kind": "detail"
+ },
+ {
+  "question": "在条件生成模型里，能否不额外训练一个判别网络，就在采样阶段调节样本真实感与多样性之间的平衡？",
+  "expect": "Classifier-Free Diffusion Guidance",
+  "kind": "concept"
+ },
+ {
+  "question": "同时训练一个条件生成模型和一个无条件生成模型时，推理时要把哪两个分数预测做线性组合来调节条件约束的强度？",
+  "expect": "Classifier-Free Diffusion Guidance",
+  "kind": "detail"
+ },
+ {
+  "question": "想让车辆的感知模块模仿人类先看整体再聚焦局部的观察方式，从而更完整地理解复杂交通场景，应该采用什么样的信息处理顺序？",
+  "expect": "CogAD: Cognitive-Hierarchy Guided End-to-End Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "生成多条候选行驶轨迹时，该方法从哪两个层面建模不确定性，来兼顾轨迹的多样性与合理性？",
+  "expect": "CogAD: Cognitive-Hierarchy Guided End-to-End Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "VLM-based controllers for cars are too slow because they decode long textual chains, and their discrete outputs don't line up with continuous control—what unified approach compresses scene understanding into a compact decision-oriented representation instead?",
+  "expect": "ColaVLA: Leveraging Cognitive Latent Reasoning for Hierarchical Parallel Trajectory Planning in Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "What selection strategy adapts the compressed decision-oriented meta-actions to the ego vehicle's own state?",
+  "expect": "ColaVLA: Leveraging Cognitive Latent Reasoning for Hierarchical Parallel Trajectory Planning in Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "有没有一种生成方法能把随机噪声直接映射成样本，一步就出结果，同时还能通过多步采样在算力和质量之间做权衡？",
+  "expect": "Consistency Models",
+  "kind": "concept"
+ },
+ {
+  "question": "这种把噪声直接映射成样本的生成器，除了从预训练的扩散生成器中蒸馏以外，能否完全独立地从头训练？",
+  "expect": "Consistency Models",
+  "kind": "detail"
+ },
+ {
+  "question": "If a team replaces separate perception, prediction, and control modules with one jointly trained network, does pouring in far more recorded fleet footage keep improving results, or do the gains taper off?",
+  "expect": "Data Scaling Laws for End-to-End Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "Over what span of training-set sizes, measured in hours, was model performance evaluated in this study?",
+  "expect": "Data Scaling Laws for End-to-End Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "I want to generate images by iteratively reversing a noising process, but it takes too long because it needs hundreds of steps—how can I make sampling much faster without changing the training objective?",
+  "expect": "Denoising Diffusion Implicit Models",
+  "kind": "concept"
+ },
+ {
+  "question": "What range of wall-clock speedup does the proposed sampling procedure achieve over the original iterative generative process?",
+  "expect": "Denoising Diffusion Implicit Models",
+  "kind": "detail"
+ },
+ {
+  "question": "What class of generative methods synthesizes images by learning to reverse a process that gradually corrupts data with noise, drawing on nonequilibrium thermodynamics?",
+  "expect": "Denoising Diffusion Probabilistic Models",
+  "kind": "concept"
+ },
+ {
+  "question": "What simplified objective, derived from a specific weighting of the variational lower bound, reduces to predicting the noise added at each step?",
+  "expect": "Denoising Diffusion Probabilistic Models",
+  "kind": "detail"
+ },
+ {
+  "question": "在条件生成任务中，如何借助一个预先训练的分类器的梯度，在采样阶段以牺牲样本多样性为代价来提升保真度？",
+  "expect": "Diffusion Models Beat GANs on Image Synthesis",
+  "kind": "concept"
+ },
+ {
+  "question": "在 128×128 分辨率的类别条件生成基准上，该方法报告的最佳 FID 分数是多少？",
+  "expect": "Diffusion Models Beat GANs on Image Synthesis",
+  "kind": "detail"
+ },
+ {
+  "question": "机器人策略学习里那种靠几十步迭代采样生成动作的生成式规划器，怎么改才能搬到车端做实时推理、同时还保住动作的多样性和质量？",
+  "expect": "DiffusionDrive: Truncated Diffusion Model for End-to-End Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "这个模型不是从纯高斯噪声开始去噪，而是把采样的起点放在一个什么样的先验分布上，从而只需极少步数就能得到多模态动作？",
+  "expect": "DiffusionDrive: Truncated Diffusion Model for End-to-End Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "在端到端车辆规划系统里，怎样才能让模型对将来场景的预测直接左右当前时刻输出的行驶轨迹，而不是只把它当作额外的训练目标？",
+  "expect": "DriveFuture: Future-Aware Latent World Models for Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "训练阶段先用当前隐状态和自车动作推演出后续隐状态之后，是借助什么机制拿真实的后续隐状态对它进行对齐修正的？",
+  "expect": "DriveFuture: Future-Aware Latent World Models for Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "当环境演化预测与车辆行为决策被拆成两条互不相干的链路时，怎样才能让二者共享同一套内部表示，使推演出的未来场景与最终输出的轨迹彼此吻合？",
+  "expect": "DriveLaW:Unifying Planning and Video Generation in a Latent Driving World",
+  "kind": "concept"
+ },
+ {
+  "question": "这套框架里，负责预测未来画面的模块是通过什么样的中间量把信息传递给负责出轨迹的模块的？",
+  "expect": "DriveLaW:Unifying Planning and Video Generation in a Latent Driving World",
+  "kind": "detail"
+ },
+ {
+  "question": "在端到端决策系统里，怎么让未来场景推演与动作规划共用同一套内部表征，从而让前者真正影响到后者的决策？",
+  "expect": "DriveWorld-VLA: Unified Latent-Space World Modeling with Vision-Language-Action for Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "该方法为避免昂贵的逐像素展开，把可控的、以动作为条件的场景想象放在什么层面完成？",
+  "expect": "DriveWorld-VLA: Unified Latent-Space World Modeling with Vision-Language-Action for Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "有没有办法跳过感知、运动预测、规划逐级串联的流程，直接把自车和周围交通参与者的未来联合演化当作概率分布来建模，一次采样就同时得到运动预测与规划轨迹？",
+  "expect": "GenAD: Generative End-to-End Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "场景被编码成以实例为中心、带地图信息的 token 之后，未来轨迹的先验分布是在什么样的结构化隐空间里、借助哪类模型拟合出来的？",
+  "expect": "GenAD: Generative End-to-End Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "How can an autonomous vehicle choose the most suitable future path when neither a fixed coarse set nor a small set of dynamically generated options alone captures the full distribution of possible maneuvers?",
+  "expect": "Generalized Trajectory Scoring for End-to-end Multimodal Planning",
+  "kind": "concept"
+ },
+ {
+  "question": "What regularization technique is applied during training on an extremely dense candidate set so the evaluator remains robust when only a much smaller subset is available at inference?",
+  "expect": "Generalized Trajectory Scoring for End-to-end Multimodal Planning",
+  "kind": "detail"
+ },
+ {
+  "question": "有没有一种两阶段概率模型，在压缩潜码上训练自回归先验，就能合成清晰且变化丰富的样本，同时避开对抗训练的常见缺陷？",
+  "expect": "Generating Diverse High-Fidelity Images with VQ-VAE-2",
+  "kind": "concept"
+ },
+ {
+  "question": "在压缩潜空间中进行自回归采样，相比直接在像素空间采样，速度提升大约多少？",
+  "expect": "Generating Diverse High-Fidelity Images with VQ-VAE-2",
+  "kind": "detail"
+ },
+ {
+  "question": "When synthesizing temporally consistent multi-camera imagery from control inputs, what two-stage approach helps a learned system respect physical constraints better than directly mapping actions to frames?",
+  "expect": "GenieDrive: Towards Physics-Aware Driving World Model with 4D Occupancy Guided Video Generation",
+  "kind": "concept"
+ },
+ {
+  "question": "To what fraction of the latent size used by previous methods does the proposed encoder compress high-resolution volumetric scene grids?",
+  "expect": "GenieDrive: Towards Physics-Aware Driving World Model with 4D Occupancy Guided Video Generation",
+  "kind": "detail"
+ },
+ {
+  "question": "算力有限的情况下，有没有办法既大幅降低生成式模型训练和采样的计算开销，又不牺牲生成质量和条件控制的灵活性？",
+  "expect": "High-Resolution Image Synthesis with Latent Diffusion Models",
+  "kind": "concept"
+ },
+ {
+  "question": "怎么改造生成网络的注意力结构，才能让它同时接收文本、边框这类形式各异的条件输入？",
+  "expect": "High-Resolution Image Synthesis with Latent Diffusion Models",
+  "kind": "detail"
+ },
+ {
+  "question": "How can a motion estimation system reuse its own outputs from previous time steps so that successive results stay consistent and it can see beyond the current observation window?",
+  "expect": "HPNet: Dynamic Trajectory Forecasting with Historical Prediction Attention",
+  "kind": "concept"
+ },
+ {
+  "question": "What three relationship types are jointly factorized in the core module of the proposed network?",
+  "expect": "HPNet: Dynamic Trajectory Forecasting with Historical Prediction Attention",
+  "kind": "detail"
+ },
+ {
+  "question": "只用普通相机拍的道路行驶视频，不借助激光雷达和人工标注的目标框，能否在一个统一流程里同时得到新视角图像、像素级语义标签和运动目标的位姿，并做到实时渲染？",
+  "expect": "HUGS: Holistic Urban 3D Scene Understanding via Gaussian Splatting",
+  "kind": "concept"
+ },
+ {
+  "question": "对运动目标在优化中的位姿施加的物理约束具体包含哪些假设，从而在目标框检测噪声很大时仍能稳定重建出动态部分？",
+  "expect": "HUGS: Holistic Urban 3D Scene Understanding via Gaussian Splatting",
+  "kind": "detail"
+ },
+ {
+  "question": "How can a driving trajectory generator be trained to imitate both human drivers and hand-crafted evaluators so that environmental context directly shapes its outputs instead of relying on non-differentiable post-processing?",
+  "expect": "Hydra-MDP: End-to-end Multimodal Planning with Multi-target Hydra-Distillation",
+  "kind": "concept"
+ },
+ {
+  "question": "端到端行车决策里，纯像素级未来帧预测对输入噪声太敏感，而纯隐变量预测又缺少像素级依据、表征容易退化，有没有一种训练方案能兼顾这两边的好处？",
+  "expect": "HyWorldVLA: A Vision-Language-Action Model with Hybrid World Modeling for Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "在完成预训练之后的联合微调阶段，系统改为预测哪一类特征，再交给动作专家去生成轨迹？",
+  "expect": "HyWorldVLA: A Vision-Language-Action Model with Hybrid World Modeling for Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "在隐变量生成模型中，如果后验近似过于简单导致表示能力受限，如何在不改变生成与推断网络结构的前提下，利用多个后验样本获得更紧的似然下界？",
+  "expect": "Importance Weighted Autoencoders",
+  "kind": "concept"
+ },
+ {
+  "question": "当推断网络从后验中抽取多个样本来估计下界时，训练目标具体是把每个样本的似然与推断分布比值的平均后再取对数，还是先逐样本取对数再平均？",
+  "expect": "Importance Weighted Autoencoders",
+  "kind": "detail"
+ },
+ {
+  "question": "对于通过逐步加噪再逆向还原来生成样本的方法，有什么调整能让它们在不牺牲样本质量的前提下获得有竞争力的对数似然？",
+  "expect": "Improved Denoising Diffusion Probabilistic Models",
+  "kind": "concept"
+ },
+ {
+  "question": "学习逆向过程的方差后，采样所需的迭代步数可以减少多少？",
+  "expect": "Improved Denoising Diffusion Probabilistic Models",
+  "kind": "detail"
+ },
+ {
+  "question": "如何让车辆轨迹规划模型像人类一样选择性地关注任务相关区域并隐式推理交通上下文，而不依赖显式的全局物体检测和在线地图构建？",
+  "expect": "InsightDrive: Insight Scene Representation for End-to-End Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "该框架采用什么任务级专家混合适配器，以极低参数成本将链式思维指令中的知识注入到车辆轨迹规划模型中？",
+  "expect": "InsightDrive: Insight Scene Representation for End-to-End Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "如何让基于多视角相机的车辆运动规划不再以密集的鸟瞰图栅格特征为中心，而是围绕少量候选未来轨迹来组织特征提取与监督信号，从而在提升效率的同时增强规划感知？",
+  "expect": "iPad: Iterative Proposal-centric End-to-End Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "该方法为了在几乎不增加计算开销的前提下改善规划输出，额外设计了哪两类轻量级的辅助监督任务？",
+  "expect": "iPad: Iterative Proposal-centric End-to-End Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "How can a trajectory planner squeeze multi-view camera imagery into a small set of spatially grounded tokens and then roll those tokens forward over time to plan better under tight data and compute budgets?",
+  "expect": "Latent-WAM: Latent World Action Modeling for End-to-End Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "What attention architecture is used to autoregressively predict future scene states conditioned on historical visual and motion representations?",
+  "expect": "Latent-WAM: Latent World Action Modeling for End-to-End Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "How should a network encode a road element's geometry so that arbitrary point orderings do not create ambiguity or destabilize training?",
+  "expect": "MapTR: Structured Modeling and Learning for Online Vectorized HD Map Construction",
+  "kind": "concept"
+ },
+ {
+  "question": "In the hierarchical matching scheme, which two levels of queries are matched against the ground-truth element?",
+  "expect": "MapTR: Structured Modeling and Learning for Online Vectorized HD Map Construction",
+  "kind": "detail"
+ },
+ {
+  "question": "自动驾驶中，道路要素形状各异，且同一要素在不同标注中点顺序不唯一，怎样建立统一的表示与匹配方式让网络稳定地学出这些要素的几何形状？",
+  "expect": "MapTRv2: An End-to-End Framework for Online Vectorized HD Map Construction",
+  "kind": "concept"
+ },
+ {
+  "question": "该方法在训练阶段除主匹配之外还额外引入了哪两类手段来加快模型收敛？",
+  "expect": "MapTRv2: An End-to-End Framework for Online Vectorized HD Map Construction",
+  "kind": "detail"
+ },
+ {
+  "question": "有没有办法让视觉内容的合成不再依赖逐行顺序输出，而是一开始就把所有单元同时给出、之后再反复修正？",
+  "expect": "MaskGIT: Masked Generative Image Transformer",
+  "kind": "concept"
+ },
+ {
+  "question": "在这种先并行铺满再迭代精修的框架里，每一轮按置信度决定保留哪些位置，保留比例随迭代步数变化的调度曲线是怎么设计的？",
+  "expect": "MaskGIT: Masked Generative Image Transformer",
+  "kind": "detail"
+ },
+ {
+  "question": "For a planner facing ambiguous situations, how can it generate several plausible scene-and-trajectory pairs and rank them using the shared history instead of committing to a single outcome?",
+  "expect": "MM-Future: Multi-Mode Joint World-Action Modeling for Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "What two separate sources initialize each hypothesis before the latent scene and the planned trajectory are progressively denoised together?",
+  "expect": "MM-Future: Multi-Mode Joint World-Action Modeling for Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "场景里多个交通参与者互相影响，能不能不做两阶段先各自生成再启发式打分，而把它们的未来当作一个整体一次性自回归采样出来？",
+  "expect": "MotionLM: Multi-Agent Motion Forecasting as Language Modeling",
+  "kind": "concept"
+ },
+ {
+  "question": "把连续轨迹切成离散动作标记之后，训练时具体优化的是哪个量？",
+  "expect": "MotionLM: Multi-Agent Motion Forecasting as Language Modeling",
+  "kind": "detail"
+ },
+ {
+  "question": "How can a trajectory forecasting model produce diverse plausible futures for traffic agents without relying on a dense set of goal candidates that scales poorly?",
+  "expect": "Motion Transformer with Global Intention Localization and Local Movement Refinement",
+  "kind": "concept"
+ },
+ {
+  "question": "In this framework, what specific role does each learnable query pair play during prediction?",
+  "expect": "Motion Transformer with Global Intention Localization and Local Movement Refinement",
+  "kind": "detail"
+ },
+ {
+  "question": "When a self-driving system has to forecast where several nearby vehicles will go, how can it keep those forecasts mutually consistent instead of treating each vehicle in isolation?",
+  "expect": "MTR++: Multi-Agent Motion Prediction with Symmetric Scene Modeling and Guided Intention Querying",
+  "kind": "concept"
+ },
+ {
+  "question": "The framework splits its reasoning into two named stages, where the first narrows down an agent's coarse destination and the second polishes the path locally — what are those two stages called?",
+  "expect": "MTR++: Multi-Agent Motion Prediction with Symmetric Scene Modeling and Guided Intention Querying",
+  "kind": "detail"
+ },
+ {
+  "question": "How can a self-driving system forecast road users' future motion by combining sparse map polylines with raw per-agent kinematic states instead of encoding the scene as a dense image?",
+  "expect": "MultiPath++: Efficient Information Fusion and Trajectory Aggregation for Behavior Prediction",
+  "kind": "concept"
+ },
+ {
+  "question": "Instead of relying on a fixed set of predefined static reference queries, how does the model obtain the queries that generate its diverse future modes?",
+  "expect": "MultiPath++: Efficient Information Fusion and Trajectory Aggregation for Behavior Prediction",
+  "kind": "detail"
+ },
+ {
+  "question": "What latent design lets an unsupervised generative model avoid continuous latent variables being ignored by a powerful autoregressive decoder?",
+  "expect": "Neural Discrete Representation Learning",
+  "kind": "concept"
+ },
+ {
+  "question": "During training, how are gradients propagated through the nearest-neighbor codebook lookup to update the encoder?",
+  "expect": "Neural Discrete Representation Learning",
+  "kind": "detail"
+ },
+ {
+  "question": "What architectural and training strategies allow a multi-layer latent-variable image generator with separable convolutions to match or surpass autoregressive and flow-based models in bits per dimension?",
+  "expect": "NVAE: A Deep Hierarchical Variational Autoencoder",
+  "kind": "concept"
+ },
+ {
+  "question": "What regularization technique is used to stabilize training by constraining the spectral norm of the residual parameterization of the normal distributions?",
+  "expect": "NVAE: A Deep Hierarchical Variational Autoencoder",
+  "kind": "detail"
+ },
+ {
+  "question": "想让一个大模型直接根据摄像头和雷达的感知结果生成车辆的行驶动作，但视觉特征和语言词向量不在同一语义空间，通常怎么弥合这个差距？",
+  "expect": "OpenDriveVLA: Towards End-to-end Autonomous Driving with Large Vision Language Action Model",
+  "kind": "concept"
+ },
+ {
+  "question": "该系统在开环轨迹规划和驾驶问答这两类任务上，是在哪个公开数据集上取得最优结果的？",
+  "expect": "OpenDriveVLA: Towards End-to-end Autonomous Driving with Large Vision Language Action Model",
+  "kind": "detail"
+ },
+ {
+  "question": "为什么把大模型的场景理解能力接进车辆决策系统后，在交互式闭环测试里仍然难以做出正确判断？",
+  "expect": "ORION: A Holistic End-to-End Autonomous Driving Framework by Vision-Language Instructed Action Generation",
+  "kind": "concept"
+ },
+ {
+  "question": "为了弥合语义推理与数值轨迹输出之间的鸿沟，作者用了哪个模块来汇聚长时历史上下文？",
+  "expect": "ORION: A Holistic End-to-End Autonomous Driving Framework by Vision-Language Instructed Action Generation",
+  "kind": "detail"
+ },
+ {
+  "question": "Self-driving stacks whose trajectory generator sees only the current frame make shortsighted decisions in dynamic traffic, so what training architecture lets the system foresee how the scene will change?",
+  "expect": "ProDrive: Proactive Planning for Autonomous Driving via Ego-Environment Co-Evolution",
+  "kind": "concept"
+ },
+ {
+  "question": "What does the trajectory generator feed into the future-scene predictor so that the predicted outcome reflects the particular candidate trajectory being evaluated?",
+  "expect": "ProDrive: Proactive Planning for Autonomous Driving via Ego-Environment Co-Evolution",
+  "kind": "detail"
+ },
+ {
+  "question": "What approach can forecast future paths for all road users at once while remaining invariant to global rotation, translation, and time shifts?",
+  "expect": "QCNeXt: A Next-Generation Framework For Joint Multi-Agent Trajectory Prediction",
+  "kind": "concept"
+ },
+ {
+  "question": "What decoder design models interactions between traffic participants at future time steps rather than only at the current time?",
+  "expect": "QCNeXt: A Next-Generation Framework For Joint Multi-Agent Trajectory Prediction",
+  "kind": "detail"
+ },
+ {
+  "question": "When converting LiDAR point clouds into a top-down feature map for autonomous driving, how can a network avoid losing vertical spatial information during the height collapse?",
+  "expect": "Rethinking Dimensionality Reduction in Grid-based 3D Object Detection",
+  "kind": "concept"
+ },
+ {
+  "question": "What module dynamically predicts importance weights to focus on valuable regions during the transformation from voxel features to a top-down layout?",
+  "expect": "Rethinking Dimensionality Reduction in Grid-based 3D Object Detection",
+  "kind": "detail"
+ },
+ {
+  "question": "What FID score does the largest variant achieve on class-conditional ImageNet 256×256?",
+  "expect": "Scalable Diffusion Models with Transformers",
+  "kind": "detail"
+ },
+ {
+  "question": "How can a self-driving system forecast where every vehicle and pedestrian around it will go as one mutually consistent set of futures, instead of forecasting each road user on its own?",
+  "expect": "Scene Transformer: A unified architecture for predicting multiple agent trajectories",
+  "kind": "concept"
+ },
+ {
+  "question": "What design property keeps the network's output unchanged when the order in which the surrounding road users are listed is shuffled?",
+  "expect": "Scene Transformer: A unified architecture for predicting multiple agent trajectories",
+  "kind": "detail"
+ },
+ {
+  "question": "如何确定合适的初始状态，使得一个已训练好的扩散过程最终演化到期望的终端分布？",
+  "expect": "Score-based Generative Modeling Through Backward Stochastic Differential Equations: Inversion and Generation",
+  "kind": "concept"
+ },
+ {
+  "question": "在将扩散过程与目标分布对齐时，论文建议采用哪类网络来提升效果？",
+  "expect": "Score-based Generative Modeling Through Backward Stochastic Differential Equations: Inversion and Generation",
+  "kind": "detail"
+ },
+ {
+  "question": "What approach lets an autonomous vehicle choose its next maneuver by anticipating how the surrounding environment will change, instead of acting only on the present moment?",
+  "expect": "Future-Aware End-to-End Driving: Bidirectional Modeling of Trajectory Planning and Scene Evolution",
+  "kind": "concept"
+ },
+ {
+  "question": "During the iterative loop that alternates between predicting the surroundings and producing the vehicle's motion, is the bird's-eye-view prediction re-run at every iteration or computed just once?",
+  "expect": "Future-Aware End-to-End Driving: Bidirectional Modeling of Trajectory Planning and Scene Evolution",
+  "kind": "detail"
+ },
+ {
+  "question": "如何让一个仅靠摄像头图像输入的系统在仿真中连续控制车辆，同时生成与操作一致的文本说明？",
+  "expect": "SimLingo: Vision-Only Closed-Loop Autonomous Driving with Language-Action Alignment",
+  "kind": "concept"
+ },
+ {
+  "question": "这个仅用摄像头的方案在训练时同时优化了哪三个目标？",
+  "expect": "SimLingo: Vision-Only Closed-Loop Autonomous Driving with Language-Action Alignment",
+  "kind": "detail"
+ },
+ {
+  "question": "How can a trajectory forecaster spend extra computation only on the scenes that actually benefit, instead of running a fixed number of passes on every one of them?",
+  "expect": "SmartRefine: A Scenario-Adaptive Refinement Framework for Efficient Motion Prediction",
+  "kind": "concept"
+ },
+ {
+  "question": "What per-scene score does the method compute to decide whether another improvement pass is worth running?",
+  "expect": "SmartRefine: A Scenario-Adaptive Refinement Framework for Efficient Motion Prediction",
+  "kind": "detail"
+ },
+ {
+  "question": "多视角时序3D感知里，如果把每帧特征都缓存下来再统一处理，计算量和显存会随帧数不断增长，有没有办法让利用长时序信息时的开销与帧数无关？",
+  "expect": "Sparse4D v2: Recurrent Temporal Fusion with Sparse Model",
+  "kind": "concept"
+ },
+ {
+  "question": "该方法在帧与帧之间传递时，只让哪一类特征逐帧流转，从而不必重复携带每帧的图像特征？",
+  "expect": "Sparse4D v2: Recurrent Temporal Fusion with Sparse Model",
+  "kind": "detail"
+ },
+ {
+  "question": "在自动驾驶的连续帧感知中，如何让同一个目标的特征跨帧稳定复用，从而在不额外接关联模块的情况下直接完成身份绑定？",
+  "expect": "Sparse4D v3: Advancing End-to-End 3D Detection and Tracking",
+  "kind": "concept"
+ },
+ {
+  "question": "推理阶段，当前帧的查询是靠什么方式拿到上一帧中对应目标的实例编号的？",
+  "expect": "Sparse4D v3: Advancing End-to-End 3D Detection and Tracking",
+  "kind": "detail"
+ },
+ {
+  "question": "如何不依赖稠密的视图变换和全局注意力，只从多个相机、多个时刻的图像特征中采样少量点来迭代精修目标框，从而方便在边缘设备上部署？",
+  "expect": "Sparse4D: Multi-view 3D Object Detection with Sparse Spatial-Temporal Fusion",
+  "kind": "concept"
+ },
+ {
+  "question": "为每个锚框分配的多个 4D 关键点，具体是如何投影到不同尺度和不同时间戳的图像特征上完成采样的？",
+  "expect": "Sparse4D: Multi-view 3D Object Detection with Sparse Spatial-Temporal Fusion",
+  "kind": "detail"
+ },
+ {
+  "question": "当模块化流水线因信息丢失和误差累积导致规划不安全时，能否用一个完全可微的框架统一多任务，同时摆脱对昂贵鸟瞰图特征的依赖？",
+  "expect": "SparseDrive: End-to-End Autonomous Driving via Sparse Scene Representation",
+  "kind": "concept"
+ },
+ {
+  "question": "并行运动规划器中的碰撞感知重评分模块是如何在分层选择中确定最终轨迹的？",
+  "expect": "SparseDrive: End-to-End Autonomous Driving via Sparse Scene Representation",
+  "kind": "detail"
+ },
+ {
+  "question": "当候选轨迹词表足够密集时，静态词表能否达到动态生成候选的精度？",
+  "expect": "SparseDriveV2: Scoring is All You Need for End-to-End Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "把轨迹因子分解成几何路径和速度剖面后，这两类候选集合各自是怎么组织起来实现动作空间组合覆盖的？",
+  "expect": "SparseDriveV2: Scoring is All You Need for End-to-End Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "想让车辆只靠摄像头工作，把感知、预测、规划整合进单个网络一起训练并直接输出控制量，同时中间结果还要能被人看懂，这种系统应该怎么设计？",
+  "expect": "ST-P3: End-to-end Vision-based Autonomous Driving via Spatial-Temporal Feature Learning",
+  "kind": "concept"
+ },
+ {
+  "question": "在把多帧图像特征投影到俯视视角之前，用什么对齐方式把不同时刻的特征统一到自车坐标系，从而保住三维几何结构？",
+  "expect": "ST-P3: End-to-end Vision-based Autonomous Driving via Spatial-Temporal Feature Learning",
+  "kind": "detail"
+ },
+ {
+  "question": "How can a generative model stay computationally practical while still producing globally coherent pictures at megapixel scale?",
+  "expect": "Taming Transformers for High-Resolution Image Synthesis",
+  "kind": "concept"
+ },
+ {
+  "question": "In what spatial order are the learned discrete codes of a picture traversed when the second-stage sequence model learns their joint distribution?",
+  "expect": "Taming Transformers for High-Resolution Image Synthesis",
+  "kind": "detail"
+ },
+ {
+  "question": "What kind of predictive approach forecasts how a road scene will evolve over time to help an automated vehicle perceive and interact with its dynamic surroundings?",
+  "expect": "The Role of World Models in Shaping Autonomous Driving: A Comprehensive Survey",
+  "kind": "concept"
+ },
+ {
+  "question": "What are the five types of scene representations used to categorize methods that forecast road scene evolution?",
+  "expect": "The Role of World Models in Shaping Autonomous Driving: A Comprehensive Survey",
+  "kind": "detail"
+ },
+ {
+  "question": "For a self-driving policy that must handle crowded urban traffic, what approach to combining camera images and LiDAR scans works better than aligning the two modalities geometrically?",
+  "expect": "TransFuser: Imitation with Transformer-Based Sensor Fusion for Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "Does the merging of front-view image features and top-down LiDAR features happen only once at the end of the backbone, or repeatedly across several feature scales?",
+  "expect": "TransFuser: Imitation with Transformer-Based Sensor Fusion for Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "What neural network-based approach learns a probabilistic latent representation of complex data for both generation and inference, and is trained with stochastic gradient descent?",
+  "expect": "Tutorial on Variational Autoencoders",
+  "kind": "concept"
+ },
+ {
+  "question": "What technique makes the random sampling step differentiable so that gradients can flow through it when training a latent variable model with neural networks?",
+  "expect": "Tutorial on Variational Autoencoders",
+  "kind": "detail"
+ },
+ {
+  "question": "Instead of stacking separate models for each stage, how can onboard perception and prediction be tied together so that they serve the car's final motion decision and errors don't compound?",
+  "expect": "Planning-oriented Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "What shared interface do the different task modules inside this single-network stack use to pass information and coordinate with one another?",
+  "expect": "Planning-oriented Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "现有级联方案中，未来画面预测只能间接正则化规划，轨迹分支仍会过拟合数据集特有的先验；要让密集的未来监督直接塑造轨迹去噪，应该采用什么架构？",
+  "expect": "UNIVERSE: Unified Video Action Models for Autonomous Driving with Flexible Mask-Modulated Modality Generation",
+  "kind": "concept"
+ },
+ {
+  "question": "在共享生成参数下，训练时用什么可见性约束来阻止未来帧 token 与轨迹 token 互相注意，从而既防止目标泄漏又支持测试时只保留轨迹分支？",
+  "expect": "UNIVERSE: Unified Video Action Models for Autonomous Driving with Flexible Mask-Modulated Modality Generation",
+  "kind": "detail"
+ },
+ {
+  "question": "有没有办法让端到端轨迹规划不依赖密集的栅格化占用图，而是直接把交通参与者与地图元素当作实例级约束来同时提升安全性并加快推理？",
+  "expect": "VAD: Vectorized Scene Representation for Efficient Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "该方法的轻量版本相比基础版本在推理速度上最多提升了多少倍？",
+  "expect": "VAD: Vectorized Scene Representation for Efficient Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "当从大量人类操控数据中学习车辆行为策略时，未来动作存在多种可能且带有随机性，直接回归单一确定动作难以覆盖这些模式，应该怎样建模并利用数据来监督？",
+  "expect": "VADv2: End-to-End Vectorized Autonomous Driving via Probabilistic Planning",
+  "kind": "concept"
+ },
+ {
+  "question": "高维连续时空动作空间难以直接处理时，模型先把它离散成什么结构，再标记化成什么表示，并与场景表示交互来输出动作分布？",
+  "expect": "VADv2: End-to-End Vectorized Autonomous Driving via Probabilistic Planning",
+  "kind": "detail"
+ },
+ {
+  "question": "给定一句文字描述生成对应图像时，逐词解码的自回归路线存在顺序偏差和误差累积，有没有非自回归的思路能在相同参数量下取得更好的生成质量？",
+  "expect": "Vector Quantized Diffusion Model for Text-to-Image Synthesis",
+  "kind": "concept"
+ },
+ {
+  "question": "为了把图像生成阶段的推理速度提升到传统逐词解码方法的十五倍，作者采用了什么样的重参数化技巧？",
+  "expect": "Vector Quantized Diffusion Model for Text-to-Image Synthesis",
+  "kind": "detail"
+ },
+ {
+  "question": "能不能像语言模型预测下一个词那样，先把图片变成一串离散编码，再用自回归 Transformer 在大规模数据上预训练来提升视觉任务表现？",
+  "expect": "Vector-quantized Image Modeling with Improved VQGAN",
+  "kind": "concept"
+ },
+ {
+  "question": "作者把负责把图片编码成离散码的编码器和解码器从卷积结构换成了什么网络？",
+  "expect": "Vector-quantized Image Modeling with Improved VQGAN",
+  "kind": "detail"
+ },
+ {
+  "question": "在自动驾驶的行为预测里，怎样绕开把道路结构和运动目标的轨迹画成鸟瞰图再交给卷积网络处理的做法，既避免信息损失又大幅降低计算量？",
+  "expect": "VectorNet: Encoding HD Maps and Agent Dynamics from Vectorized Representation",
+  "kind": "concept"
+ },
+ {
+  "question": "为了强化模型对场景上下文的学习能力，训练时额外加入了什么辅助任务，具体要还原哪些被遮挡的东西？",
+  "expect": "VectorNet: Encoding HD Maps and Agent Dynamics from Vectorized Representation",
+  "kind": "detail"
+ },
+ {
+  "question": "有没有一种端到端的模型，能从任意数量的输入视角一次性直接预测出场景的全部三维属性，而不用为每个子任务分别训练网络？",
+  "expect": "VGGT: Visual Geometry Grounded Transformer",
+  "kind": "concept"
+ },
+ {
+  "question": "这种直接从多视角图像预测三维结构的网络，完成一次场景重建通常需要多长时间？",
+  "expect": "VGGT: Visual Geometry Grounded Transformer",
+  "kind": "detail"
+ },
+ {
+  "question": "What generative architecture can produce temporally coherent, high-fidelity moving-image sequences while also being trainable jointly on both still pictures and clips?",
+  "expect": "Video Diffusion Models",
+  "kind": "concept"
+ },
+ {
+  "question": "What conditional sampling technique does this approach introduce to extend generated clips along both spatial and temporal axes toward longer duration and higher resolution?",
+  "expect": "Video Diffusion Models",
+  "kind": "detail"
+ },
+ {
+  "question": "在车辆运动规划中，如何让预测模型从观测中推断未来潜在状态，并让动作监督直接优化规划相关的表征？",
+  "expect": "WA-JEPA: Rethinking the Video JEPA Paradigm for World-Action Modeling in Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "该工作用什么概率生成过程来建模潜在未来，而不是直接做确定性回归？",
+  "expect": "WA-JEPA: Rethinking the Video JEPA Paradigm for World-Action Modeling in Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "在视觉语言模型的微调中，为什么按训练样本的难度进行筛选，能够带来比常规全量微调更强的分布外泛化能力？",
+  "expect": "Why Does RL Generalize Better Than SFT? A Data-Centric Perspective on VLM Post-Training",
+  "kind": "concept"
+ },
+ {
+  "question": "论文具体用什么指标来衡量每个训练样本的难度，并据此筛选训练集？",
+  "expect": "Why Does RL Generalize Better Than SFT? A Data-Centric Perspective on VLM Post-Training",
+  "kind": "detail"
+ },
+ {
+  "question": "有没有办法不依赖人工感知标注，直接用视觉基础模型提供的隐表征来生成并筛选多条候选行驶轨迹？",
+  "expect": "World4Drive: End-to-End Autonomous Driving via Intention-aware Physical Latent World Model",
+  "kind": "concept"
+ },
+ {
+  "question": "每条候选轨迹所依据的驾驶意图，是从什么特征里提取出来的？",
+  "expect": "World4Drive: End-to-End Autonomous Driving via Intention-aware Physical Latent World Model",
+  "kind": "detail"
+ },
+ {
+  "question": "自动驾驶系统在选出候选行驶方案后，怎样借助对周边场景未来演化的预测来提前判断其安全性？",
+  "expect": "End-to-End Driving with Online Trajectory Evaluation via BEV World Model",
+  "kind": "concept"
+ },
+ {
+  "question": "该框架中负责预测未来场景表示的子模块，其训练监督信号来自哪一类现成工具？",
+  "expect": "End-to-End Driving with Online Trajectory Evaluation via BEV World Model",
+  "kind": "detail"
+ },
+ {
+  "question": "What self-supervised approach learns a scene representation by predicting 3D semantic primitives from queries and then trains temporal predictors for occupancy perception, forecasting, and motion planning?",
+  "expect": "DLWM: Dual Latent World Models enable Holistic Gaussian-centric Pre-training in Autonomous Driving",
+  "kind": "concept"
+ },
+ {
+  "question": "Which two image modalities are reconstructed in the first stage to provide supervision for the 3D primitives predicted from queries?",
+  "expect": "DLWM: Dual Latent World Models enable Holistic Gaussian-centric Pre-training in Autonomous Driving",
+  "kind": "detail"
+ },
+ {
+  "question": "能不能用一个自回归网络同时编码历史运动并逐步推断未来位置，从而避免编码器-解码器结构里信息不同步的问题？",
+  "expect": "DONUT: A Decoder-Only Model for Trajectory Prediction",
+  "kind": "concept"
+ },
+ {
+  "question": "把语言建模中一次生成多个后续词的做法借用到运动预估上时，这个额外目标具体要求网络多完成什么任务？",
+  "expect": "DONUT: A Decoder-Only Model for Trajectory Prediction",
+  "kind": "detail"
+ },
+ {
+  "question": "What step-compression technique recursively merges denoising steps across multiple resolutions so that a video generator can produce a frame in a single sampling step?",
+  "expect": "DreamerAD: Efficient Reinforcement Learning via Latent World Model for Autonomous Driving",
+  "kind": "detail"
+ }
+]
