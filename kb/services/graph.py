@@ -31,6 +31,8 @@ import logging
 import re
 from dataclasses import dataclass, field
 
+from . import budget
+
 log = logging.getLogger(__name__)
 
 PROMPT_VERSION = "2026-10-08.1"
@@ -149,14 +151,20 @@ def extract(note, provider=None) -> Extraction:
         provider = chat_provider()
 
     try:
-        payload = provider.extract(
-            [{"role": "user", "content": body[:12000]}],
-            schema=SCHEMA,
-            description="提交从笔记里抽出的实体与关系",
-            system=SYSTEM,
-            instructions="只输出 JSON。关系必须带 evidence（照抄笔记原句）。",
-            max_tokens=8000,
-        )
+        # 记账要带上 kind。图谱抽取是全项目单次最重的调用（每篇一次、思考极多），
+        # 之前没标 kind，它的开销全落进 "other" —— 看预算报表的人根本认不出
+        # 是谁花的。**消耗最大的那件事，恰恰是最需要被认出来的。**
+        with budget.track("graph", ref=note.paper_id or note.id):
+            payload = provider.extract(
+                [{"role": "user", "content": body[:12000]}],
+                schema=SCHEMA,
+                description="提交从笔记里抽出的实体与关系",
+                system=SYSTEM,
+                instructions="只输出 JSON。关系必须带 evidence（照抄笔记原句）。",
+                # **不指定 max_tokens。** 这里曾写死 8000，实测一篇笔记思考
+                # 14738 字符就把它吃光，JSON 一个字符都没吐出来。思考量由模型
+                # 决定，调用方无从预估——交给 provider 给足。
+            )
     except Exception as exc:
         log.warning("图谱抽取失败 %s：%s", note.id, exc)
         return Extraction(error=str(exc)[:200])
@@ -301,10 +309,17 @@ def index_note(note, provider=None) -> dict:
     }
 
 
-def build(limit: int = 0, ctx=None) -> dict:
-    """给所有有笔记的论文建图。"""
+def build(limit: int = 0, ctx=None, resume: bool = False) -> dict:
+    """给所有有笔记的论文建图。
+
+    ``resume=True`` 跳过已经建过的（有 ``PaperEntity`` 记录的），用于中断后续跑。
+    一次全量建图要跑几十次大额度调用，中途被打断是常态而不是意外——**能续跑**
+    比「跑得快」重要。抽失败的论文不会留下记录，所以续跑时会**自动重试它们**，
+    这正是想要的。
+    """
     from ..extensions import db
     from ..models import Note
+    from ..models.graph import PaperEntity
 
     notes = (
         db.session.query(Note)
@@ -312,6 +327,11 @@ def build(limit: int = 0, ctx=None) -> dict:
         .order_by(Note.id)
         .all()
     )
+    total = len(notes)
+    if resume:
+        indexed = {row[0] for row in db.session.query(PaperEntity.paper_id).distinct()}
+        notes = [note for note in notes if note.paper_id not in indexed]
+        log.info("续跑：%d 篇已建过，本次处理 %d 篇", total - len(notes), len(notes))
     if limit:
         notes = notes[:limit]
 
@@ -323,9 +343,14 @@ def build(limit: int = 0, ctx=None) -> dict:
         result = index_note(note)
         if result.get("error"):
             failed += 1
+            log.warning("建图失败 %d/%d %s：%s", index, len(notes), note.paper_id, result["error"])
         else:
             done += 1
-    return {"notes": len(notes), "ok": done, "failed": failed}
+            log.info(
+                "建图 %d/%d %s：实体 %d，关系 %d",
+                index, len(notes), note.paper_id, result["entities"], result["relations"],
+            )
+    return {"notes": len(notes), "ok": done, "failed": failed, "skipped": total - len(notes)}
 
 
 def stats() -> dict:

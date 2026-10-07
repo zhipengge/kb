@@ -208,15 +208,18 @@ def register_cli(app: Flask) -> None:
     @kb_group.command("graph")
     @click.option("--build", is_flag=True, help="从笔记重建知识图谱（调模型，按篇计费）")
     @click.option("--limit", type=int, default=0, help="只处理前 N 篇")
-    def graph_cmd(build: bool, limit: int) -> None:
+    @click.option("--resume", is_flag=True, help="跳过已建过的论文（中断后续跑用）")
+    def graph_cmd(build: bool, limit: int, resume: bool) -> None:
         """知识图谱：查看规模，或从笔记重建。"""
         from .services import graph
 
         if build:
             click.echo("正在从笔记抽取实体与关系…")
-            result = graph.build(limit=limit)
+            result = graph.build(limit=limit, resume=resume)
             click.secho(
-                f"完成：{result['ok']} 篇成功，{result['failed']} 篇失败", fg="green"
+                f"完成：{result['ok']} 篇成功，{result['failed']} 篇失败"
+                + (f"，跳过 {result['skipped']} 篇已建过" if result["skipped"] else ""),
+                fg="green",
             )
 
         s = graph.stats()
