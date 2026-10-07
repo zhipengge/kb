@@ -24,6 +24,14 @@ from typing import Any, Protocol
 log = logging.getLogger(__name__)
 
 
+MIN_MAX_TOKENS = 8000
+
+
+def _max_tokens(requested: int | None, default: int) -> int:
+    """算出这次调用实际给多少输出额度。见 MIN_MAX_TOKENS 的说明。"""
+    return max(int(requested or default), MIN_MAX_TOKENS)
+
+
 class LLMError(RuntimeError):
     """模型调用失败。消息面向用户。"""
 

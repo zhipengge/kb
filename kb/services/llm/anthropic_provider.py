@@ -21,6 +21,7 @@ from .base import (
     LLMError,
     LLMResponse,
     Usage,
+    _max_tokens,
     build_extraction_tool,
 )
 
@@ -30,6 +31,25 @@ log = logging.getLogger(__name__)
 # 实测：一个是非题的回答消耗了 2240 字符的思考；结构化抽取那次直接把
 # 3000 token 的额度全用在思考上，正文一个字都没剩。
 DEFAULT_MAX_TOKENS = 16000
+
+# 单次调用的**输出额度下限**。
+#
+# **思考与正文共用这个额度。** 实测这个端点上一个简单问题就能产生
+# 6000~24000 字符的思考，而调用方按「我只要几十个字的答案」把 max_tokens
+# 设成 1000~3000 —— 结果思考先把额度吃光，正文一个字都没有：
+#
+#     text='' thinking=8724字符 stop=max_tokens out=2000
+#
+# 更糟的是这种情况**不报错**：调用方拿到空字符串，各处的容错逻辑
+# （查询扩展退回原查询、能力探测判定「不支持」、连通性测试报失败）
+# 会把它当成一个正常结果继续走。同一个缺陷今天在三处独立出现
+# （查询扩展、图谱抽取、能力探测），每次都以为是各自的问题。
+#
+# 所以把下限抬到一处，而不是让十几个调用点各自记得给足。
+# 这是**上限**不是目标值——模型不会因为额度变大就多写，只有原本被截断的
+# 那些调用会因此拿到本该有的输出。
+MIN_MAX_TOKENS = 8000
+
 
 
 def _is_official_anthropic(base_url: str | None) -> bool:
@@ -145,7 +165,7 @@ class AnthropicProvider:
 
         payload: dict[str, Any] = {
             "model": self.model,
-            "max_tokens": max_tokens or self.default_max_tokens,
+            "max_tokens": _max_tokens(max_tokens, self.default_max_tokens),
             "messages": messages,
         }
         if system:
@@ -204,7 +224,7 @@ class AnthropicProvider:
 
         payload: dict[str, Any] = {
             "model": self.model,
-            "max_tokens": max_tokens or self.default_max_tokens,
+            "max_tokens": _max_tokens(max_tokens, self.default_max_tokens),
             "messages": messages,
         }
         if system:
@@ -273,7 +293,7 @@ class AnthropicProvider:
             prompt,
             system=system,
             tools=[tool],
-            max_tokens=max_tokens or self.default_max_tokens,
+            max_tokens=_max_tokens(max_tokens, self.default_max_tokens),
         )
 
         payload = response.first_tool_input(EXTRACTION_TOOL)
@@ -311,7 +331,7 @@ class AnthropicProvider:
                 ],
                 system=system,
                 tools=[tool],
-                max_tokens=max_tokens or self.default_max_tokens,
+                max_tokens=_max_tokens(max_tokens, self.default_max_tokens),
             )
             payload = response.first_tool_input(EXTRACTION_TOOL)
             spent = spent + response.usage
