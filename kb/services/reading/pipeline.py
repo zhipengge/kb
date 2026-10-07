@@ -133,8 +133,9 @@ def _paper_sections(paper: Paper) -> list[dict]:
     order: list[str] = []
 
     for chunk in chunks:
-        # 公式与图注不参与精读的上下文组装——它们会被单独引用，
-        # 混进散文里只会让模型分心
+        # 公式与图注不参与**散文**的组装——它们会被单独引用，混进来只会让模型分心。
+        # 表格也走单独的通道（见 _paper_tables），但理由不同：它是被
+        # 独立预算挑进去的，不是被遗弃。
         if chunk.kind in {"formula", "figure", "table"}:
             continue
         key = chunk.section_path or "正文"
@@ -146,6 +147,34 @@ def _paper_sections(paper: Paper) -> list[dict]:
     return [
         {"path": path, "text": "\n\n".join(grouped[path])}
         for path in order
+    ]
+
+
+def _paper_tables(paper: Paper, *, limit: int = 24) -> list[dict]:
+    """取出论文的表格正文，供精读时一并参考。
+
+    **为什么单独拎出来。** 表格里是 SOTA 对比、消融、超参、复杂度——
+    论文中最浓缩的定量信息。此前整条链路有两个断点叠在一起：
+    抽取阶段只留 ``\\caption{}`` 丢掉 tabular 正文，组装阶段又把 kind=table
+    的分块整个跳过。结果是模型手上只有散文，凡是「论文里有没有超过 baseline」
+    这类问题只能回一句「具体数值未在提供文本中给出」——
+    实测 85 篇笔记里 385 处 ``⚠️ 待核``，79% 都是这一句的变体。
+
+    按小节顺序返回，调用方按预算挑选。
+    """
+    from ...models.chunk import CHUNK_TABLE
+
+    chunks = (
+        db.session.query(Chunk)
+        .filter(Chunk.paper_id == paper.id, Chunk.kind == CHUNK_TABLE)
+        .order_by(Chunk.ord)
+        .limit(limit)
+        .all()
+    )
+    return [
+        {"path": chunk.section_path or "表格", "text": chunk.text or ""}
+        for chunk in chunks
+        if chunk.text and chunk.text.strip()
     ]
 
 
@@ -178,6 +207,7 @@ def _stage_summarize(paper: Paper, provider, ctx) -> tuple[dict | None, str | No
         title=paper.title or "",
         abstract=paper.abstract or "",
         sections=sections,
+        tables=_paper_tables(paper),
         paper_type=paper_type,
     )
     if ctx is not None:

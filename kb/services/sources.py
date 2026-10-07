@@ -212,12 +212,21 @@ def _latex_sections_to_chunker(
             )
 
         for figure in latex_section.figures:
-            if not figure.caption:
+            if not figure.caption and not figure.body:
                 continue
             kind_label = "图" if figure.kind == "figure" else "表"
+            # 表格正文要一并写进 text，不能只留标题。
+            # 此前只发「表注：…」，于是整个索引里没有一个表格数值——
+            # 笔记里 79% 的 ⚠️ 待核都在说「具体数值未在提供的文本中给出」，
+            # 而表格就在源码里躺着。见 latex.render_tabular 的说明。
+            body = (figure.body or "").strip()
+            if body:
+                text = f"{kind_label}注：{figure.caption}\n\n{body}" if figure.caption else body
+            else:
+                text = f"{kind_label}注：{figure.caption}"
             extras.append(
                 {
-                    "text": f"{kind_label}注：{figure.caption}",
+                    "text": text,
                     "kind": "figure" if figure.kind == "figure" else "table",
                     "section_path": latex_section.path,
                     "page": page or 1,
@@ -225,6 +234,7 @@ def _latex_sections_to_chunker(
                         "caption": figure.caption,
                         "graphics": figure.graphics,
                         "fig_label": figure.label,
+                        "has_body": bool(body),
                     },
                 }
             )

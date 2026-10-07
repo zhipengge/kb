@@ -57,6 +57,9 @@ class LatexFigure:
     label: str | None = None
     graphics: list[str] = field(default_factory=list)  # \includegraphics 引用的文件
     env: str = ""
+    # 表格正文（tabular 渲染成文本）。图表在源码里除了标题还有实体内容，
+    # 而**数值全在正文里**——只留标题等于把整张表丢了。
+    body: str = ""
 
 
 @dataclass
@@ -878,6 +881,83 @@ def _walk_sections(text: str) -> list[LatexSection]:
     return sections
 
 
+def render_tabular(raw: str) -> str:
+    """把 ``\\begin{tabular}...`` 渲染成可读的文本表格。
+
+    **为什么必须做这一步。** 论文里几乎没有比表格更浓缩的信息——SOTA 对比、
+    消融、超参、复杂度，全在表里。而抽取管线此前只留 ``\\caption{}``、
+    把 tabular 正文整个丢掉：实测 320 个「table」分块 100% 只是表注，
+    44 篇论文里的 481 个 tabular 环境全部落空。
+
+    后果在笔记里直接可见：85 篇笔记共 385 处 ``⚠️ 待核``，其中 **79% 写的是
+    「具体数值未在提供的文本中给出」**——不是论文没写，是我们没给模型看。
+    「实验结果」小节里该有数字的地方是一个个 ⚠️。
+
+    输出用 Markdown 表格的形态（``|`` 分隔），模型对这种结构最熟。
+    不做对齐、不猜列宽——保留原始的行列关系即可，排版是渲染端的事。
+    """
+    if not raw:
+        return ""
+
+    text = raw
+
+    # 1) 取出所有 tabular 环境（含 tabular*、带列格式参数的）
+    #
+    # 列格式参数里**会嵌套花括号**：`\begin{tabular}{@{}ll cc@{}c}` 这种写法
+    # 用 `\{[^{}]*\}` 匹配不掉，那串 `@ll cc@` 就会当成第一行内容漏出来。
+    # 所以要允许一层嵌套。
+    bodies = re.findall(
+        r"\\begin\{tabular\*?\}(?:\{(?:[^{}]|\{[^{}]*\})*\})?(.*?)\\end\{tabular\*?\}",
+        text,
+        re.S,
+    )
+    if not bodies:
+        return ""
+
+    rows_out: list[str] = []
+    for body in bodies:
+        # 2) 去掉只影响排版、不含信息的命令。
+        #    \cmidrule 后面可能跟 (r)/(l) 这类裁剪参数，也要一起吃掉，
+        #    否则会留下一行 `(r)3-6 (l)7-10`。
+        body = re.sub(
+            r"\\(?:hline|toprule|midrule|bottomrule|cline|cmidrule|"
+            r"addlinespace|smallskip|medskip|bigskip|centering|small|"
+            r"footnotesize|scriptsize|tiny|arraybackslash)\b"
+            r"(?:\([^)]*\))?(\[[^\]]*\])?(\{[^{}]*\})?",
+            "",
+            body,
+        )
+        body = re.sub(r"\\vspace\{[^}]*\}|\\vskip\s*[-\d.]+\w*", "", body)
+        body = re.sub(r"\\rule(?:\[[^\]]*\])?\{[^}]*\}\{[^}]*\}", "", body)
+
+        # 3) 按行切。`\\` 是换行，注意它可能是 `\\[2pt]` 形式
+        for row in re.split(r"\\\\", body):
+            row = row.strip()
+            if not row:
+                continue
+
+            # 4) \multicolumn{n}{fmt}{text} 只保留 text，列数信息对阅读无意义
+            row = re.sub(
+                r"\\multicolumn\{[^}]*\}\{[^}]*\}\{((?:[^{}]|\{[^{}]*\})*)\}",
+                r"\1",
+                row,
+            )
+            # \multirow 同理，保留内容
+            row = re.sub(
+                r"\\multirow\{[^}]*\}\{[^}]*\}\{((?:[^{}]|\{[^{}]*\})*)\}",
+                r"\1",
+                row,
+            )
+
+            cells = [_clean_latex(c) for c in row.split("&")]
+            cells = [c.strip() for c in cells]
+            if not any(cells):
+                continue
+            rows_out.append("| " + " | ".join(cells) + " |")
+
+    return "\n".join(rows_out)
+
+
 def _collect_figures(chunk: str, section: LatexSection) -> None:
     """从章节片段里收集图与表。
 
@@ -906,6 +986,9 @@ def _collect_figures(chunk: str, section: LatexSection) -> None:
                         )
                         if g.strip()
                     ],
+                    # 表格正文。图没有「正文」可抽（内容在图片里），
+                    # 只有表才有——而数值恰恰都在表里。
+                    body=render_tabular(raw) if kind == "table" else "",
                 )
             )
 
@@ -931,7 +1014,13 @@ def _make_figure(node, kind: str, raw: str) -> LatexFigure:
     graphics = re.findall(r"\\includegraphics(?:\[[^\]]*\])?\*?\{([^}]+)\}", raw)
     graphics = [g.strip() for g in graphics if g.strip()]
 
-    return LatexFigure(kind=kind, caption=caption, label=label, graphics=graphics)
+    return LatexFigure(
+        kind=kind,
+        caption=caption,
+        label=label,
+        graphics=graphics,
+        body=render_tabular(raw) if kind == "table" else "",
+    )
 
 
 def _collect_by_regex(chunk: str, section: LatexSection) -> None:
@@ -1087,4 +1176,5 @@ __all__ = [
     "fetch_arxiv_source",
     "find_main_tex",
     "parse_latex",
+    "render_tabular",
 ]

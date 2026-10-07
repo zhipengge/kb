@@ -25,7 +25,11 @@ log = logging.getLogger(__name__)
 # 它们是为 Claude Code 写的交互式 skill，这里把方法论移植成服务端的
 # 结构化抽取——保留了闸门与分诊，去掉了多智能体外呼（对 98 篇批量处理
 # 成本太高）。
-PROMPT_VERSION = "2026-10-07.1"
+PROMPT_VERSION = "2026-10-08.1"
+# 2026-10-07.1 → 2026-10-08.1：组装上下文时加入**表格正文**。
+# 在此之前表格数据从来没有进过模型，笔记里凡涉及定量对比的地方都是
+# 「具体数值未在提供文本中给出」。改了这一条必须提版本号，否则
+# 指纹不变、已有的 85 篇笔记会被判为「缓存有效」而不会重跑。
 
 
 # --------------------------------------------------------------------------
@@ -434,7 +438,9 @@ def build_paper_context(
     title: str,
     abstract: str = "",
     sections: list[dict] | None = None,
+    tables: list[dict] | None = None,
     max_chars: int = 24000,
+    table_budget: int = 6000,
     paper_type: str = TYPE_METHOD,
 ) -> str:
     """组装喂给模型的论文正文。
@@ -524,6 +530,33 @@ def build_paper_context(
 
         for section in chosen:
             parts.append(f"## {section['path']}\n{section['text']}")
+
+    # ---- 表格正文 ----
+    #
+    # **单独给一块预算，不走上面那套优先级排序。** 两个原因：
+    #
+    # 1. 表格体量能超过整个上下文预算（实测最大的单篇表格正文 26678 字符，
+    #    而 max_chars 是 24000）。混进正文一起排，要么把正文挤没，
+    #    要么自己被截断——两种都是坏结果。
+    # 2. 表格的价值是**定量数据**，恰恰是散文里最缺的东西。此前表格正文
+    #    在抽取阶段就被丢了，笔记里 79% 的 ⚠️ 待核都在说「数值未在提供的
+    #    文本中给出」；现在把它接上，就得保证它真的进得去。
+    #
+    # 放在正文之后：先保证散文（方法与动机）在场，表格是补充。
+    if tables:
+        used = 0
+        picked: list[str] = []
+        for table in tables:
+            text = (table.get("text") or "").strip()
+            if not text:
+                continue
+            if used + len(text) > table_budget:
+                # 放不下就整体跳过，不做半张表——截一半的表格比没有更误导
+                continue
+            used += len(text)
+            picked.append(f"### {table.get('path') or '表格'}\n{text}")
+        if picked:
+            parts.append("## 表格数据\n\n" + "\n\n".join(picked))
 
     return "\n\n".join(parts)
 
