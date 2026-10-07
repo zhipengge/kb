@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import struct
@@ -218,10 +219,18 @@ def _table_name(slug: str, storage: str) -> str:
     slug 来自模型名（``BAAI/bge-small-zh-v1.5`` 之类），里面有点、斜杠、
     连字符——这些在 SQL 标识符里都非法，直接拼进 CREATE TABLE 会得到
     一个难懂的语法错误。统一换成下划线。
+
+    **截断之后必须补一段摘要。** 表名有唯一约束，而模型名常常共享长前缀：
+    实测 ``…/paraphrase-multilingual-mpnet-base-v2`` 与
+    ``…/paraphrase-multilingual-MiniLM-L12-v2`` 前 40 个字符完全相同，
+    只做截断的话第二个模型**根本注册不进去**——报的是 UNIQUE 约束冲突，
+    表现却是「这个模型换不过去」。留前缀是为了表名还能认出是哪个模型，
+    加摘要才是保证不撞车的那一半。
     """
     prefix = "vec_chunks_" if storage == "vec0" else "blob_chunks_"
     safe_slug = re.sub(r"[^a-zA-Z0-9]+", "_", slug).strip("_").lower()
-    return f"{prefix}{safe_slug[:40]}"
+    digest = hashlib.sha256(safe_slug.encode()).hexdigest()[:8]
+    return f"{prefix}{safe_slug[:40]}_{digest}"
 
 
 def _safe_table(model: EmbeddingModel) -> str:
