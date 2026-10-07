@@ -45,6 +45,21 @@ _SORTS = {
     "title": Note.title.asc(),
 }
 
+# 排序名 → (排序列, 是否降序)。游标必须锚定在排序列上（见 services/paging.py），
+# 所以这里要把列对象单独拿出来，不能只留现成的 order_by 表达式。
+def _dt(raw):
+    """游标里的时间串 → datetime。理由同 papers.py。"""
+    from datetime import datetime
+
+    return datetime.fromisoformat(raw)
+
+
+_SORT_COLUMNS: dict[str, tuple] = {
+    "updated": (Note.updated_at, True, lambda n: n.updated_at, _dt),
+    "created": (Note.created_at, True, lambda n: n.created_at, _dt),
+    "title": (Note.title, False, lambda n: n.title, str),
+}
+
 
 def list_notes(
     *,
@@ -87,12 +102,36 @@ def list_notes(
             )
 
     total = base.count()
-    ordered = base.order_by(_SORTS.get(sort, _SORTS["updated"]))
-    if cursor:
-        ordered = ordered.filter(Note.id < cursor)
+
+    # 排序与游标必须锚定在**同一个字段**上，否则会静默丢记录——
+    # 详见 services/paging.py 的说明。这里把排序列也一并带出来。
+    from .paging import cursor_condition, make_cursor
+
+    sort_name = sort if sort in _SORT_COLUMNS else "updated"
+    column, descending, key_of, key_parse = _SORT_COLUMNS[sort_name]
+
+    # 决胜字段的方向必须与游标条件一致：降序用 id DESC、升序用 id ASC。
+    # 写死 id DESC 而条件是 `id > last_id`（升序）时，排序键并列的记录
+    # 会互相顶掉——实测 year_asc 因为大量同年并列，翻了 6 页出 107 条、其中 45 条重复。
+    ordered = base.order_by(
+        column.desc() if descending else column.asc(),
+        Note.id.desc() if descending else Note.id.asc(),
+    )
+    condition = cursor_condition(
+        column, Note.id, cursor, descending=descending, parse=key_parse
+    )
+    if condition is not None:
+        ordered = ordered.filter(condition)
 
     rows = ordered.limit(limit + 1).all()
-    next_cursor = rows[limit].id if len(rows) > limit else None
+    # 游标取**实际返回的最后一条**（下标 limit-1），不是多取的那条前瞻行。
+    # 取下一条会让它被下一页的条件排除，而它又没出现在上一页——
+    # 每翻一页静默丢一条（实测 85 篇按每页 20 翻完只拿到 81 篇）。
+    if len(rows) > limit:
+        last = rows[limit - 1]
+        next_cursor = make_cursor(key_of(last), last)
+    else:
+        next_cursor = None
     return rows[:limit], next_cursor, total
 
 

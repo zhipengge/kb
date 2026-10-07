@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 
 from ..extensions import db
 from ..models import Chunk, Note, Paper, PaperDuplicate
@@ -46,6 +46,35 @@ _SORTS = {
     "year": Paper.year.desc(),
     "year_asc": Paper.year.asc(),
     "updated": Paper.updated_at.desc(),
+}
+
+# 排序名 → (排序列, 是否降序, 取键值的函数)。
+#
+# 游标必须锚定在**排序列**上，所以要把列对象单独拿出来（见 services/paging.py）。
+# year 可空，因此用 coalesce 顶掉 NULL：否则 `year < 游标值` 对 NULL 行恒为
+# NULL——既不真也不假——那些行会**被静默跳过**。排序和取键值必须用同一个
+# 表达式，两边不一致就又回到「排序与游标基准对不上」的老问题。
+_YEAR_SORT_KEY = func.coalesce(Paper.year, -1)
+
+def _dt(raw):
+    """游标里的时间串 → datetime。
+
+    必须还原成 datetime 再交给 SQLAlchemy，不能拿字符串直接比——
+    见 services/paging.py 里 parse 参数的说明（ISO 的 T 分隔与 SQLite
+    的空格分隔字典序不同，直接比会恒假，翻页要么不动要么只出一页）。
+    """
+    from datetime import datetime
+
+    return datetime.fromisoformat(raw)
+
+
+_SORT_COLUMNS: dict[str, tuple] = {
+    "added": (Paper.created_at, True, lambda p: p.created_at, _dt),
+    "added_asc": (Paper.created_at, False, lambda p: p.created_at, _dt),
+    "title": (Paper.title, False, lambda p: p.title, str),
+    "year": (_YEAR_SORT_KEY, True, lambda p: p.year if p.year is not None else -1, int),
+    "year_asc": (_YEAR_SORT_KEY, False, lambda p: p.year if p.year is not None else -1, int),
+    "updated": (Paper.updated_at, True, lambda p: p.updated_at, _dt),
 }
 
 # 排序选项的**唯一来源**：界面下拉框和视图校验都从这里取。
@@ -152,14 +181,38 @@ def list_papers(
 
     total = base.count()
 
-    order = _SORTS.get(sort, _SORTS["added"])
-    ordered = base.order_by(Paper.id.desc()) if sort in {"added", "updated"} else base.order_by(order)
+    # 排序与游标必须锚定在**同一个字段**上，否则会静默丢记录——
+    # 详见 services/paging.py 的说明。
+    from .paging import cursor_condition, make_cursor
 
-    if cursor:
-        ordered = ordered.filter(Paper.id < cursor)
+    sort_name = sort if sort in _SORT_COLUMNS else "added"
+    column, descending, key_of, key_parse = _SORT_COLUMNS[sort_name]
+
+    # 决胜字段的方向必须与游标条件一致：降序用 id DESC、升序用 id ASC。
+    # 写死 id DESC 而条件是 `id > last_id`（升序）时，排序键并列的记录
+    # 会互相顶掉——实测 year_asc 因为大量同年并列，翻了 6 页出 107 条、其中 45 条重复。
+    ordered = base.order_by(
+        column.desc() if descending else column.asc(),
+        Paper.id.desc() if descending else Paper.id.asc(),
+    )
+    condition = cursor_condition(
+        column, Paper.id, cursor, descending=descending, parse=key_parse
+    )
+    if condition is not None:
+        ordered = ordered.filter(condition)
 
     rows = ordered.limit(limit + 1).all()
-    next_cursor = rows[limit].id if len(rows) > limit else None
+    # 游标要取**实际返回的最后一条**（下标 limit-1），不是多取的那条前瞻行。
+    #
+    # 下一页的条件是「排在游标之后」，取前瞻行会让它自己被排除在下一页之外，
+    # 而它也没出现在上一页——**每翻一页静默丢一条**。
+    # 实测 85 篇按每页 20 翻完只拿到 81 篇，漏掉的正好是 4 个页边界各一条。
+    # 这比「分页完全失效」更难发现：客户端拿到的是看似完整的列表。
+    if len(rows) > limit:
+        last = rows[limit - 1]
+        next_cursor = make_cursor(key_of(last), last)
+    else:
+        next_cursor = None
     return rows[:limit], next_cursor, total
 
 

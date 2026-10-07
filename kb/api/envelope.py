@@ -104,7 +104,20 @@ def parse_paging() -> tuple[int, str | None]:
 
 
 def paged(data: list, *, next_cursor: str | None, limit: int, total: int | None = None):
-    """分页响应。``next_cursor`` 为 None 表示没有下一页。"""
+    """分页响应。``next_cursor`` 为 None 表示没有下一页。
+
+    **传进来的是「上一页最后一条的标识」这种原始值，编码由这里做。**
+    不要把编码推给调用方：线格式是信封层的职责，散到各个端点就会漏。
+
+    这不是假设——修之前 ``encode_cursor`` 从头到尾**没有任何调用者**，
+    三个分页端点（papers / notes / jobs）都直接把裸 ID 塞进 ``next_cursor``。
+    而 ``parse_paging`` 会把它当 base64 解，裸 ULID 解出来不是合法 UTF-8，
+    于是 ``decode_cursor`` 返回 None、分页条件被静默跳过——**第二页永远
+    等于第一页**，客户端按文档「原样回传游标」就会拿到同一批结果转到天荒地老。
+    实测确认：两页返回的 id 完全相同，且 ``next_cursor`` 原样不变。
+    """
+    if next_cursor:
+        next_cursor = encode_cursor(next_cursor)
     meta: dict[str, Any] = {"next_cursor": next_cursor, "limit": limit}
     if total is not None:
         meta["total"] = total
