@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% block title %}文库 · 知识库{% endblock %}
+
+{% macro paper_card(paper) %}
+  <a class="paper-card" href="{{ url_for('web.paper_detail', paper_id=paper.id) }}">
+    <div class="paper-card-title">{{ paper.title or '（未命名）' }}</div>
+    <div class="small faint">
+      {{ paper.year or '—' }}{% if paper.venue %} · {{ paper.venue[:34] }}{% endif %}
+      {% if paper.authors %} · {{ paper.authors[0] }}{% if paper.authors|length > 1 %} 等{% endif %}{% endif %}
+    </div>
+    <div class="paper-card-tags">
+      {% for link in paper.tag_links[:4] %}
+        <span class="badge" style="background:{{ link.tag.color or 'var(--bg-muted)' }}22;
+              color:{{ link.tag.color or 'var(--text-muted)' }}">{{ link.tag.name }}</span>
+      {% endfor %}
+      {% if paper.tag_links|length > 4 %}
+        <span class="faint small">+{{ paper.tag_links|length - 4 }}</span>
+      {% endif %}
+    </div>
+    <div class="paper-card-foot">
+      <span class="badge {{ 'badge-ok' if paper.ingest_status == 'indexed'
+                            else 'badge-warn' if paper.ingest_status == 'pending'
+                            else 'badge-danger' if paper.ingest_status == 'failed' else '' }}">{{
+        {'indexed':'已索引','pending':'待索引','parsed':'已解析','failed':'失败'}.get(paper.ingest_status,
+        paper.ingest_status) }}</span>
+      <span class="small faint">{{ {'unread':'待读','reading':'在读','read':'已读',
+                                    'reviewed':'已复看'}.get(paper.reading_status,
+                                    paper.reading_status) }}</span>
+      {% if paper.notes %}<span class="small faint">· {{ paper.notes|length }} 笔记</span>{% endif %}
+      {% if not paper.has_file %}<span class="badge badge-warn">文件缺失</span>{% endif %}
+    </div>
+  </a>
+{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>文库</h1>
+    <p>
+      共 {{ stats.total }} 篇
+      {% if stats.unread %}· {{ stats.unread }} 篇待读{% endif %}
+      {% if stats.pending %}· {{ stats.pending }} 篇待索引{% endif %}
+    </p>
+  </div>
+  <div class="btn-row">
+    <a class="btn btn-ghost" href="{{ url_for('web.notes_page') }}"
+       title="含不关联论文的独立笔记">全部笔记</a>
+    <form method="post" action="{{ url_for('web.trigger_scan') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn" type="submit"
+              title="递归扫描配置的论文目录，自动去重">扫描目录</button>
+    </form>
+    <a class="btn btn-primary" href="{{ url_for('web.paper_add') }}">添加论文</a>
+  </div>
+</div>
+
+{% set has_filter = filters.q or filters.year or filters.venue or filters.reading_status
+                    or filters.ingest_status or filters.has_code or filters.tag_ids %}
+
+<div class="library-layout">
+
+  {# ==================== 左侧：标签分面 ==================== #}
+  <aside class="facet-panel">
+    <div class="card">
+      <div class="card-head">
+        <h3>标签</h3>
+        {% if filters.tag_ids %}
+          <a class="btn btn-ghost" style="padding:2px 8px; font-size:.8rem"
+             href="{{ url_for('web.library', **filter_args) }}">清除</a>
+        {% endif %}
+      </div>
+
+      {% if filters.tag_ids %}
+        <div class="row" style="gap:6px; margin-bottom:var(--pad-sm)">
+          {% for tid in filters.tag_ids %}
+            {% set tag = (facets.values() | sum(start=[]) | selectattr('id', 'equalto', tid) | list | first) %}
+            {% if tag %}
+              <a class="badge" style="text-decoration:none"
+                 title="点击移除这个筛选"
+                 href="{{ url_for('web.library', tag=filters.tag_ids | reject('equalto', tid) | list,
+                                  **filter_args) }}">{{ tag.name }} ×</a>
+            {% endif %}
+          {% endfor %}
+        </div>
+        <div class="small faint" style="margin-bottom:var(--pad-sm)">
+          同时具备所有选中的标签
+        </div>
+      {% endif %}
+
+      <div class="facet-scroll">
+        {% for dimension, tags in facets.items() %}
+          {% if tags %}
+            <div class="facet-group">
+              <div class="facet-dim">{{ {'topic':'主题','method':'方法','task':'任务',
+                                         'domain':'领域','venue':'会议','status':'状态',
+                                         'misc':'其它'}.get(dimension, dimension) }}</div>
+              {% for tag in tags %}
+                {% set selected = tag.id in filters.tag_ids %}
+                <a class="facet-item {{ 'is-selected' if selected else '' }}"
+                   href="{{ url_for('web.library',
+                                    tag=(filters.tag_ids | reject('equalto', tag.id) | list) if selected
+                                        else (filters.tag_ids + [tag.id]),
+                                    **filter_args) }}">
+                  <span class="facet-name">{{ tag.name }}</span>
+                  <span class="facet-count">{{ tag.count }}</span>
+                </a>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endfor %}
+        {% if not facets %}
+          <div class="small faint">
+            还没有标签。标签可以由 AI 建议，也可以手工添加。
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </aside>
+
+  {# ==================== 右侧：筛选条 + 结果 ==================== #}
+  <div class="library-main">
+    <form class="card" method="get" action="{{ url_for('web.library') }}">
+      {# 标签筛选由左侧分面的链接承载，这里用隐藏字段带过去，
+         否则一按「筛选」当前选中的标签就全丢了。 #}
+      {% for tid in filters.tag_ids %}
+        <input type="hidden" name="tag" value="{{ tid }}">
+      {% endfor %}
+      <div class="row">
+        <div style="flex:2; min-width:180px">
+          <input type="text" name="q" value="{{ filters.q }}"
+                 placeholder="搜索标题、作者、摘要、DOI、arXiv 号…">
+        </div>
+
+        <select name="year" style="width:auto">
+          <option value="">全部年份</option>
+          {% for y in options.years %}
+            <option value="{{ y }}" {{ 'selected' if filters.year|string == y|string else '' }}>{{ y }}</option>
+          {% endfor %}
+        </select>
+
+        <select name="reading_status" style="width:auto">
+          <option value="">全部状态</option>
+          {% for value, label in [('unread','待读'),('reading','在读'),('read','已读'),('reviewed','已复看')] %}
+            <option value="{{ value }}" {{ 'selected' if filters.reading_status == value else '' }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+
+        <select name="has_code" style="width:auto">
+          <option value="">有无代码均可</option>
+          <option value="1" {{ 'selected' if filters.has_code == '1' else '' }}>有代码</option>
+          <option value="0" {{ 'selected' if filters.has_code == '0' else '' }}>无代码</option>
+        </select>
+
+        <select name="sort" style="width:auto" title="排序方式">
+          {% for value, label in sort_options %}
+            <option value="{{ value }}" {{ 'selected' if filters.sort == value else '' }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+
+        <button class="btn" type="submit">筛选</button>
+        {% if has_filter %}
+          <a class="btn btn-ghost" href="{{ url_for('web.library') }}">清空</a>
+        {% endif %}
+      </div>
+      <div class="row" style="margin-top:8px">
+        <span class="small faint">共 {{ total }} 篇符合条件</span>
+        <span class="spacer"></span>
+        {# 视图切换。状态存 localStorage，这里只负责发出切换意图。 #}
+        <div class="view-switch" role="group" aria-label="视图切换">
+          <button class="btn btn-ghost" type="button" data-view-set="list" title="列表视图">列表</button>
+          <button class="btn btn-ghost" type="button" data-view-set="card" title="卡片视图">卡片</button>
+        </div>
+      </div>
+    </form>
+
+    {% if papers %}
+      <div data-view="list">
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>标题</th>
+                <th class="nowrap">年份 / 会议</th>
+                <th class="nowrap">标签</th>
+                <th class="nowrap">状态</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for paper in papers %}
+              <tr>
+                <td>
+                  <a href="{{ url_for('web.paper_detail', paper_id=paper.id) }}">
+                    {{ paper.title or '（未命名）' }}
+                  </a>
+                  <div class="small faint">
+                    {% if paper.arxiv_id %}<span class="mono">arXiv:{{ paper.arxiv_id }}</span>{% endif %}
+                    {% if not paper.has_file %}
+                      <span class="badge badge-warn" title="数据库里有记录，但磁盘上的文件找不到了">文件缺失</span>
+                    {% endif %}
+                    {% if paper.deleted_at %}<span class="badge badge-danger">已移出</span>{% endif %}
+                  </div>
+                </td>
+                <td class="nowrap small">
+                  {{ paper.year or '—' }}
+                  {% if paper.venue %}<div class="faint">{{ paper.venue[:24] }}</div>{% endif %}
+                </td>
+                <td class="small">
+                  {% for link in paper.tag_links[:3] %}
+                    <span class="badge" style="background:{{ link.tag.color or 'var(--bg-muted)' }}22;
+                          color:{{ link.tag.color or 'var(--text-muted)' }}">{{ link.tag.name }}</span>
+                  {% endfor %}
+                  {% if paper.tag_links|length > 3 %}
+                    <span class="faint">+{{ paper.tag_links|length - 3 }}</span>
+                  {% endif %}
+                </td>
+                <td class="nowrap">
+                  <span class="badge {{ 'badge-ok' if paper.ingest_status == 'indexed'
+                                        else 'badge-warn' if paper.ingest_status == 'pending'
+                                        else 'badge-danger' if paper.ingest_status == 'failed'
+                                        else '' }}">{{ paper.ingest_status }}</span>
+                  <div class="small faint">{{ paper.reading_status }}</div>
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div data-view="card" hidden>
+        <div class="paper-grid">
+          {% for paper in papers %}{{ paper_card(paper) }}{% endfor %}
+        </div>
+      </div>
+
+      {% if pages > 1 %}
+        <nav class="row" style="justify-content:center; margin-top:var(--pad)">
+          {% for p in range(1, pages + 1) %}
+            {% if p <= 3 or p > pages - 3 or (p >= page - 1 and p <= page + 1) %}
+              <a class="btn {{ 'btn-primary' if p == page else '' }}"
+                 href="{{ url_for('web.library', page=p, **page_args) }}">{{ p }}</a>
+            {% elif p == 4 or p == pages - 3 %}
+              <span class="faint">…</span>
+            {% endif %}
+          {% endfor %}
+        </nav>
+      {% endif %}
+
+    {% else %}
+      <div class="card">
+        <div class="empty">
+          {% if has_filter %}
+            没有符合筛选条件的论文。<a href="{{ url_for('web.library') }}">清空筛选</a>
+          {% else %}
+            <div>文库还是空的。</div>
+            <div class="row" style="justify-content:center; margin-top:16px">
+              <a class="btn btn-primary" href="{{ url_for('web.paper_add') }}">添加一篇论文</a>
+              <a class="btn" href="{{ url_for('web.settings_page', tab='paths') }}">去设置论文目录</a>
+            </div>
+            <div class="small faint" style="margin-top:14px">
+              论文多的话，把 PDF 放进论文目录再点「扫描目录」——会递归查找并自动去重。
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/library.js') }}"></script>
+{% endblock %}

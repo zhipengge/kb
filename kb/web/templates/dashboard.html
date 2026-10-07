@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}概览 · 知识库{% endblock %}
+
+{% macro chart_card(id, title, hint='', span=False) %}
+  <div class="card chart-card {{ 'span-2' if span else '' }}">
+    <div class="card-head">
+      <h3>{{ title }}</h3>
+      {% if hint %}<span class="small faint">{{ hint }}</span>{% endif %}
+    </div>
+    <div class="chart-box" id="{{ id }}"></div>
+  </div>
+{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>概览</h1>
+    <p>知识库的构成与当前状态</p>
+  </div>
+  <div class="btn-row">
+    <form method="post" action="{{ url_for('web.trigger_scan') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn" type="submit" title="扫描设置的论文目录，发现新论文">扫描目录</button>
+    </form>
+    <form method="post" action="{{ url_for('web.trigger_index') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn" type="submit" title="解析 PDF 正文并建立检索索引">重建索引</button>
+    </form>
+    {% if summary.overview.papers > summary.overview.notes %}
+      <form method="post" action="{{ url_for('web.trigger_read_missing') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn" type="submit"
+                title="给还没有精读笔记的论文排队（每篇约 30-60 秒，按篇计费）">
+          为未读论文生成笔记
+        </button>
+      </form>
+    {% endif %}
+    <a class="btn btn-primary" href="{{ url_for('web.settings_page') }}">设置</a>
+  </div>
+</div>
+
+{# -------- 路径不存在时的醒目提示 --------
+   这是最常见的「配置没生效」原因，值得放在页面最上方而不是埋在设置页里。 #}
+{% if missing_roots %}
+  <div class="notice notice-warn">
+    <h3>{{ missing_roots|length }} 个论文目录还不存在</h3>
+    {% for root in missing_roots %}
+      <div class="mono small">{{ root.path }}</div>
+    {% endfor %}
+    <div class="btn-row" style="margin-top:10px">
+      <form method="post" action="{{ url_for('web.create_roots') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn" type="submit">创建这些目录</button>
+      </form>
+      <a class="btn" href="{{ url_for('web.settings_page', tab='paths') }}">去修改路径</a>
+    </div>
+  </div>
+{% endif %}
+
+{# -------- 数据库能力异常 -------- #}
+{% if preflight and preflight.problems %}
+  <div class="notice {{ 'notice-danger' if not preflight.ok else 'notice-warn' }}">
+    <h3>数据库能力检查发现问题</h3>
+    <ul style="margin:6px 0 0; padding-left:20px">
+      {% for problem in preflight.problems %}<li>{{ problem }}</li>{% endfor %}
+    </ul>
+    {% if preflight.notes %}
+      <div class="small" style="margin-top:6px">
+        {% for note in preflight.notes %}<div>{{ note }}</div>{% endfor %}
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
+
+{# -------- 总量 -------- #}
+<div class="grid grid-4" style="margin-bottom:var(--pad)">
+  {% for label, key, hint in [
+      ('论文', 'papers', ''), ('笔记', 'notes', ''), ('分块', 'chunks', ''),
+      ('标签', 'tags', ''), ('总页数', 'pages', 'PDF 页数合计'),
+      ('正文规模', 'tokens', '约 ' ~ (summary.overview.tokens // 1000) ~ 'k tokens')] %}
+    <div class="card stat-card">
+      <div class="stat-value">
+        {{ '{:,}'.format(stats[key]) if stats[key] is number else stats[key] }}
+      </div>
+      <div class="stat-label">{{ label }}</div>
+      {% if hint %}<div class="small faint">{{ hint }}</div>{% endif %}
+    </div>
+  {% endfor %}
+</div>
+
+{% if todos.suggestions or todos.duplicates or todos.failed_jobs %}
+  <div class="notice notice-warn">
+    <h3>待处理</h3>
+    <div class="row small">
+      {% if todos.suggestions %}
+        <span>标签建议 <b>{{ todos.suggestions }}</b> 条</span>
+        <a class="btn btn-ghost" style="padding:1px 8px" href="{{ url_for('web.tags_page') }}">去处理</a>
+      {% endif %}
+      {% if todos.duplicates %}
+        <span>疑似重复 <b>{{ todos.duplicates }}</b> 组</span>
+        <a class="btn btn-ghost" style="padding:1px 8px" href="{{ url_for('web.duplicates_page') }}">去处理</a>
+      {% endif %}
+      {% if todos.failed_jobs %}
+        <span>失败任务 <b>{{ todos.failed_jobs }}</b> 个</span>
+        <a class="btn btn-ghost" style="padding:1px 8px" href="{{ url_for('web.jobs_page') }}">去处理</a>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
+
+{# -------- 分类汇总图表 --------
+   数据内联成 JSON，由 dashboard.js 消费。不额外发请求是刻意的：
+   这一页的全部意义就是「一眼看到构成」，等 XHR 回来才出现图表会先闪一排空框。 #}
+<script type="application/json" id="kb-stats">{{ summary | tojson }}</script>
+
+<h2 style="margin:var(--pad) 0 var(--pad-sm)">构成</h2>
+
+<div class="chart-grid">
+  {{ chart_card('chart-year', '年份分布', '按发表年份', span=True) }}
+  {{ chart_card('chart-reading', '阅读进度') }}
+  {{ chart_card('chart-ingest', '入库状态') }}
+  {{ chart_card('chart-tags', '标签分布', '各维度热度 Top 12', span=True) }}
+  {{ chart_card('chart-notes', '笔记类型') }}
+  {{ chart_card('chart-chunks', '正文构成', '分块类型') }}
+  {{ chart_card('chart-code', '代码可得性') }}
+</div>
+
+<h2 style="margin:var(--pad) 0 var(--pad-sm)">动态</h2>
+
+<div class="grid grid-2">
+  {# -------- 最近入库 -------- #}
+  <div class="card">
+    <div class="card-head">
+      <h2>最近入库</h2>
+      {% if active_jobs %}<span class="badge badge-info">{{ active_jobs|length }} 个任务进行中</span>{% endif %}
+    </div>
+    {% if recent_papers %}
+      <table>
+        <tbody>
+        {% for paper in recent_papers %}
+          <tr>
+            <td>
+              <a class="truncate" style="display:block" title="{{ paper.title }}"
+                 href="{{ url_for('web.paper_detail', paper_id=paper.id) }}">{{ paper.title or '（未命名）' }}</a>
+              <div class="small faint">
+                {{ paper.year or '年份未知' }}
+                {% if paper.venue %} · {{ paper.venue }}{% endif %}
+              </div>
+            </td>
+            <td class="num nowrap">
+              <span class="badge">{{ paper.ingest_status }}</span>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty">
+        还没有论文。<br>
+        把 PDF 放进论文目录后点「扫描目录」，或到设置里指定路径。
+      </div>
+    {% endif %}
+  </div>
+
+  {# -------- 任务 -------- #}
+  <div class="card">
+    <div class="card-head">
+      <h2>任务</h2>
+      <a class="small" href="{{ url_for('web.jobs_page') }}">全部任务 →</a>
+    </div>
+    {% set shown = active_jobs or recent_jobs %}
+    {% if shown %}
+      <table>
+        <tbody>
+        {% for job in shown %}
+          <tr>
+            <td>
+              <div class="row" style="gap:6px">
+                <span class="status status-{{ job.status }}">{{ job.status }}</span>
+                <span class="mono small">{{ job.type }}</span>
+              </div>
+              {% if job.message %}<div class="small muted truncate">{{ job.message }}</div>{% endif %}
+              {% if job.status == 'running' %}
+                <div class="progress" style="margin-top:5px">
+                  <div class="progress-bar" style="width: {{ (job.progress * 100)|round(1) }}%"></div>
+                </div>
+              {% endif %}
+            </td>
+            <td class="num small faint nowrap">{{ job.created_at|timeago }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty">暂无任务</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

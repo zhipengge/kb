@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}关于 · 知识库{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>运行状态</h1>
+    <p>部署信息与依赖能力自检</p>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <h2>存储</h2>
+    <dl class="kv">
+      <dt>数据目录</dt><dd class="mono">{{ boot_config.data_dir }}</dd>
+      <dt>数据库</dt><dd class="mono">{{ boot_config.db_path }}</dd>
+      <dt>上传目录</dt><dd class="mono">{{ boot_config.uploads_dir }}</dd>
+      <dt>密钥来源</dt><dd class="mono">{{ boot_config.secret_key_source }}</dd>
+    </dl>
+    <p class="small muted" style="margin-top:var(--pad-sm)">
+      数据目录默认位于 Linux 原生磁盘。放到 <span class="mono">/mnt</span> 等挂载盘上也能工作，
+      但索引读写的速度会明显慢一些。
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>服务</h2>
+    <dl class="kv">
+      <dt>版本</dt><dd>kb {{ kb_version }}</dd>
+      <dt>监听</dt><dd class="mono">{{ boot_config.host }}:{{ boot_config.port }}</dd>
+      <dt>鉴权模式</dt><dd class="mono">{{ boot_config.auth_mode }}</dd>
+      <dt>内嵌 worker</dt>
+      <dd>{{ '已启用' if boot_config.worker_embedded else '已关闭' }}</dd>
+      <dt>单次上传上限</dt><dd>{{ boot_config.max_upload_mb }} MB</dd>
+    </dl>
+  </div>
+</div>
+
+{% if preflight %}
+<div class="card">
+  <div class="card-head">
+    <h2>数据库能力</h2>
+    {% if preflight.ok %}
+      <span class="badge badge-ok">全部正常</span>
+    {% else %}
+      <span class="badge badge-danger">存在问题</span>
+    {% endif %}
+  </div>
+  <table>
+    <tbody>
+      <tr>
+        <td>SQLite 版本</td>
+        <td class="num mono">{{ preflight.sqlite_version }}</td>
+      </tr>
+      <tr>
+        <td>日志模式
+          <div class="small faint">WAL 允许读写并发；降级到 DELETE 功能不受影响但会更慢</div>
+        </td>
+        <td class="num">
+          <span class="badge {{ 'badge-ok' if preflight.journal_mode == 'wal' else 'badge-warn' }}">
+            {{ preflight.journal_mode }}</span>
+        </td>
+      </tr>
+      <tr>
+        <td>外键约束
+          <div class="small faint">SQLite 默认关闭，必须显式开启</div>
+        </td>
+        <td class="num">
+          <span class="badge {{ 'badge-ok' if preflight.foreign_keys else 'badge-danger' }}">
+            {{ '已开启' if preflight.foreign_keys else '未开启' }}</span>
+        </td>
+      </tr>
+      <tr>
+        <td>FTS5 全文检索</td>
+        <td class="num">
+          <span class="badge {{ 'badge-ok' if preflight.fts5 else 'badge-danger' }}">
+            {{ '可用' if preflight.fts5 else '不可用' }}</span>
+        </td>
+      </tr>
+      <tr>
+        <td>中文 trigram 分词
+          <div class="small faint">中文检索的主力；不可用时会退化为 LIKE 扫描</div>
+        </td>
+        <td class="num">
+          <span class="badge {{ 'badge-ok' if preflight.fts5_trigram else 'badge-warn' }}">
+            {{ '可用' if preflight.fts5_trigram else '不可用' }}</span>
+        </td>
+      </tr>
+      <tr>
+        <td>向量检索
+          <div class="small faint">不可用时降级为暴力检索，功能不受影响</div>
+        </td>
+        <td class="num">
+          {% if vector_state and vector_state.enabled %}
+            <span class="badge badge-ok">sqlite-vec {{ vector_state.version }}</span>
+          {% else %}
+            <span class="badge badge-warn">不可用</span>
+          {% endif %}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  {% if preflight.problems or preflight.notes %}
+    <div class="notice {{ 'notice-warn' if preflight.problems else 'notice-ok' }}"
+         style="margin-top:var(--pad)">
+      {% for problem in preflight.problems %}<div>· {{ problem }}</div>{% endfor %}
+      {% for note in preflight.notes %}<div class="small">· {{ note }}</div>{% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>对外接口</h2>
+  <p class="small muted">
+    其他 agent 可以通过 REST 接口访问知识库，使用 Bearer Token 鉴权。
+  </p>
+  <dl class="kv">
+    <dt>健康检查</dt><dd class="mono">GET /api/v1/system/health</dd>
+    <dt>存活探测</dt><dd class="mono">GET /api/v1/system/ping<span class="badge">无需鉴权</span></dd>
+    <dt>任务列表</dt><dd class="mono">GET /api/v1/jobs</dd>
+    <dt>读写设置</dt><dd class="mono">GET|PATCH /api/v1/settings</dd>
+  </dl>
+  <div class="notice" style="margin-top:var(--pad-sm)">
+    用 <span class="mono">flask kb key create --name 用途</span> 签发访问密钥。
+    明文只在创建时显示一次。
+  </div>
+</div>
+{% endblock %}

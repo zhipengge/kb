@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+{% block title %}设置 · 知识库{% endblock %}
+
+{#-
+  表单由 settings 的 schema 渲染，不是手写的。
+  加一个配置项只需要在 kb/settings.py 里加一行，这个模板不用动——
+  手写表单的话，schema 和界面迟早会漂移，而漂移的表现是「配置项不生效」，
+  这种 bug 很难被注意到。
+-#}
+
+{% macro render_field(item) %}
+  {% set t = item.type %}
+  <div class="field">
+    <label for="f-{{ item.key }}">
+      {{ item.label }}
+      {% if item.source == 'db' %}
+        <span class="badge badge-db" title="已自定义（保存在数据库中）">已自定义</span>
+      {% else %}
+        <span class="badge badge-default" title="当前为默认值">默认</span>
+      {% endif %}
+    </label>
+
+    {% if t == 'bool' %}
+      <div class="field-row">
+        <input type="checkbox" id="f-{{ item.key }}" name="{{ item.key }}"
+               value="1" {{ 'checked' if item.value else '' }}>
+        <span class="small muted">{{ '已启用' if item.value else '已关闭' }}</span>
+      </div>
+
+    {% elif t == 'choice' %}
+      <select id="f-{{ item.key }}" name="{{ item.key }}">
+        {% for choice in item.choices or [] %}
+          <option value="{{ choice }}" {{ 'selected' if item.value == choice else '' }}>
+            {{ choice }}
+          </option>
+        {% endfor %}
+      </select>
+
+    {% elif t == 'list' %}
+      <textarea id="f-{{ item.key }}" name="{{ item.key }}"
+                rows="3" spellcheck="false">{{ (item.value or [])|join('\n') }}</textarea>
+
+    {% elif t == 'raw' %}
+      {# 程序写入的结构化数据（如能力探测结果），只读展示 #}
+      <pre class="mono small" style="max-height:200px; overflow:auto; margin:0">{{
+        item.value | tojson(indent=2) if item.value else '（尚未探测）'
+      }}</pre>
+
+    {% elif t == 'secret' %}
+      <input type="password" id="f-{{ item.key }}" name="{{ item.key }}"
+             value="{{ item.value }}" autocomplete="new-password"
+             placeholder="{{ '已设置（留空则清除，填写则覆盖）' if item.has_value else '尚未设置' }}">
+
+    {% elif t == 'int' or t == 'float' %}
+      <input type="number" id="f-{{ item.key }}" name="{{ item.key }}"
+             value="{{ item.value }}"
+             {% if item.min is not none %}min="{{ item.min }}"{% endif %}
+             {% if item.max is not none %}max="{{ item.max }}"{% endif %}
+             {% if t == 'float' %}step="0.1"{% endif %}>
+
+    {% else %}
+      <input type="text" id="f-{{ item.key }}" name="{{ item.key }}"
+             value="{{ item.value }}" spellcheck="false">
+    {% endif %}
+
+    {% if item.help %}<div class="field-help">{{ item.help }}</div>{% endif %}
+  </div>
+{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>设置</h1>
+    <p>配置保存在数据库中，修改后立即生效</p>
+  </div>
+</div>
+
+<nav class="tabs">
+  {% for key, label in groups.items() %}
+    <a class="tab {{ 'active' if active_tab == key else '' }}"
+       href="{{ url_for('web.settings_page', tab=key) }}">{{ label }}</a>
+  {% endfor %}
+</nav>
+
+{# ---------------- 数据库状态 ----------------
+   放在设置页而不是只有「关于」页，是因为用户来这里的多数原因
+   （搜不到东西、论文没入库）都跟这些底层能力有关。 #}
+{% if preflight %}
+  <details class="card" style="margin-bottom:var(--pad)" {{ 'open' if not preflight.ok else '' }}>
+    <summary style="cursor:pointer; font-weight:600">
+      运行状态
+      {% if preflight.ok %}
+        <span class="badge badge-ok">正常</span>
+      {% else %}
+        <span class="badge badge-danger">异常</span>
+      {% endif %}
+      {% if vector_state and not vector_state.enabled %}
+        <span class="badge badge-warn">向量检索不可用</span>
+      {% endif %}
+    </summary>
+    <div style="margin-top:var(--pad-sm)">
+      <dl class="kv">
+        <dt>数据目录</dt><dd class="mono">{{ boot_config.data_dir }}</dd>
+        <dt>数据库</dt><dd class="mono">{{ boot_config.db_path }}</dd>
+        <dt>密钥来源</dt><dd class="mono">{{ boot_config.secret_key_source }}</dd>
+        <dt>SQLite</dt><dd>{{ preflight.sqlite_version }} · 日志模式 {{ preflight.journal_mode }}</dd>
+        <dt>FTS5 全文检索</dt>
+        <dd>{{ '可用' if preflight.fts5 else '不可用' }}
+          {% if preflight.fts5_trigram %}· 中文 trigram 可用{% endif %}</dd>
+        <dt>向量检索</dt>
+        <dd>
+          {% if vector_state and vector_state.enabled %}
+            sqlite-vec {{ vector_state.version }}
+          {% else %}
+            不可用（将使用暴力检索降级）
+          {% endif %}
+        </dd>
+      </dl>
+      {% if preflight.problems %}
+        <div class="notice notice-warn" style="margin-top:var(--pad-sm)">
+          {% for problem in preflight.problems %}<div>· {{ problem }}</div>{% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </details>
+{% endif %}
+
+<form method="post" action="{{ url_for('web.settings_save') }}">
+  <input type="hidden" name="_tab" value="{{ active_tab }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="card">
+    {% set groups_here = grouped.get(active_tab, []) %}
+
+    {% if active_tab == 'llm' %}
+      {# 模型配置的操作区。放在表单里但用 formaction 指向各自的端点——
+         HTML 表单不能嵌套，所以按钮必须挂在外层表单上再改投递地址。 #}
+      <div class="notice {{ 'notice-ok' if llm_status.ready else 'notice-warn' }}">
+        <h3>模型状态</h3>
+        <dl class="kv">
+          <dt>服务商</dt><dd>{{ llm_status.provider }}</dd>
+          <dt>端点</dt><dd class="mono">{{ llm_status.base_url }}</dd>
+          <dt>深度模型</dt><dd class="mono">{{ llm_status.deep_model or '未配置' }}</dd>
+          <dt>轻量模型</dt><dd class="mono">{{ llm_status.fast_model or '未配置' }}</dd>
+          <dt>凭据</dt>
+          <dd>{{ '已配置' if llm_status.has_credential else '未配置' }}</dd>
+        </dl>
+        {% if not llm_status.ready %}
+          <div class="small" style="margin-top:6px">
+            {% for problem in llm_status.problems %}· {{ problem }}<br>{% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="btn-row" style="margin-top:10px">
+          <button class="btn" type="submit" formnovalidate
+                  formaction="{{ url_for('web.settings_test_llm') }}"
+                  title="发一条最小请求验证配置">测试连接</button>
+          <button class="btn" type="submit" formnovalidate
+                  formaction="{{ url_for('web.settings_probe_llm') }}"
+                  title="实测服务商支持哪些能力（会消耗少量额度）">能力实测</button>
+          {% if claude_config_exists %}
+            <button class="btn" type="submit" formnovalidate
+                    formaction="{{ url_for('web.settings_import_claude_config') }}"
+                    title="读取 {{ claude_config_path }} 里的 ANTHROPIC_* 配置（含密钥）">
+              从 Claude Code 配置导入</button>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="notice">
+        <h3>关于兼容端点</h3>
+        <p class="small" style="margin:0">
+          Anthropic 兼容端点（DeepSeek、各类网关）会**接受**它们并不支持的参数而不报错。
+          例如传 PDF 文档块会得到「无法确定」、传结构化输出参数会让输出整个变空。
+          所以本系统不靠「没报错」判断能力，而是**实测**——「能力实测」按钮就是干这个的，
+          结果会存下来供后续调用使用。
+        </p>
+        <p class="small" style="margin:6px 0 0">
+          另外：思考内容与正文**共用**输出 token 额度，所以「单次最大输出 token」
+          要给得宽一些，否则推理型模型会把额度全花在思考上、正文一个字都出不来。
+        </p>
+      </div>
+    {% endif %}
+
+    {% if active_tab == 'paths' %}
+      {# 路径页额外展示每个根目录的实际状态——写了不存在的路径必须立刻可见 #}
+      <div class="notice {{ 'notice-ok' if not root_status.papers|selectattr('exists', 'false')|list else 'notice-warn' }}">
+        <h3>目录状态</h3>
+        <dl class="kv">
+          {% for root in root_status.papers %}
+            <dt>论文根目录</dt>
+            <dd class="mono">
+              {{ root.path }}
+              {% if not root.exists %}
+                <span class="badge badge-warn">不存在</span>
+              {% elif not root.readable %}
+                <span class="badge badge-danger">不可读</span>
+              {% else %}
+                <span class="badge badge-ok">可读</span>
+              {% endif %}
+            </dd>
+          {% endfor %}
+          {% for root in root_status.notes %}
+            <dt>笔记目录</dt>
+            <dd class="mono">{{ root.path }}
+              <span class="badge {{ 'badge-ok' if root.exists else 'badge-warn' }}">
+                {{ '存在' if root.exists else '不存在' }}</span></dd>
+          {% endfor %}
+          {% for root in root_status.codes %}
+            <dt>代码目录</dt>
+            <dd class="mono">{{ root.path }}
+              <span class="badge {{ 'badge-ok' if root.exists else 'badge-warn' }}">
+                {{ '存在' if root.exists else '不存在' }}</span></dd>
+          {% endfor %}
+        </dl>
+        <div class="btn-row" style="margin-top:10px">
+          <button class="btn" type="submit" formmethod="post" formaction="{{ url_for('web.create_roots') }}"
+                  formnovalidate>创建缺失的目录</button>
+        </div>
+      </div>
+    {% endif %}
+
+    {# 常用项直接展示，高级项折叠——避免第一次进来就被几十个参数淹没 #}
+    {% set basic = groups_here|rejectattr('advanced')|list %}
+    {% set advanced = groups_here|selectattr('advanced')|list %}
+
+    {% for item in basic %}{{ render_field(item) }}{% endfor %}
+
+    {% if advanced %}
+      <details class="advanced">
+        <summary>高级选项（{{ advanced|length }} 项）</summary>
+        <div style="margin-top:var(--pad-sm)">
+          {% for item in advanced %}{{ render_field(item) }}{% endfor %}
+        </div>
+      </details>
+    {% endif %}
+  </div>
+
+  <div class="btn-row" style="margin-top:var(--pad)">
+    <button class="btn btn-primary" type="submit">保存</button>
+    <a class="btn" href="{{ url_for('web.settings_page', tab=active_tab) }}">放弃修改</a>
+  </div>
+</form>
+
+{# ---------------- 外观实时预览 ---------------- #}
+{% if active_tab == 'appearance' %}
+  <div class="card" style="margin-top:var(--pad)">
+    <h2>预览</h2>
+    <p class="small muted">
+      外观设置保存后会立即应用到整个界面。上面的改动需要先点「保存」。
+    </p>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>正文示例</h3>
+        <p>注意力机制通过查询与键的相似度对值加权求和，使模型能够直接建模长距离依赖。</p>
+        <p class="small muted">次要文字、<a href="#">链接</a>、<code>行内代码</code>。</p>
+        <div class="btn-row">
+          <button class="btn btn-primary" type="button">主按钮</button>
+          <button class="btn" type="button">次按钮</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>状态与标签</h3>
+        <div class="row">
+          <span class="badge badge-ok">已读</span>
+          <span class="badge badge-warn">待复现</span>
+          <span class="badge badge-danger">冲突</span>
+          <span class="badge badge-info">处理中</span>
+        </div>
+        <div class="progress" style="margin-top:var(--pad-sm)">
+          <div class="progress-bar" style="width:62%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

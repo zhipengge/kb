@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} · 知识库{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align:center; padding:56px var(--pad)">
+  <div style="font-size:3rem; font-weight:700; color:var(--text-faint); line-height:1">
+    {{ code }}
+  </div>
+  <h1 style="margin-top:var(--pad)">{{ message }}</h1>
+  <p class="muted">
+    {% if code == 404 %}
+      这个页面不存在。地址可能拼错了，或者对应的内容已经被删除。
+    {% elif code == 500 %}
+      服务端出错了。详细信息记录在日志里，到「关于」页可以查看运行状态。
+    {% endif %}
+  </p>
+  <div class="btn-row" style="justify-content:center; margin-top:var(--pad)">
+    <a class="btn btn-primary" href="{{ url_for('web.dashboard') }}">回到概览</a>
+  </div>
+</div>
+{% endblock %}

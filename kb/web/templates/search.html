@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}{{ query or '检索' }} · 知识库{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div style="flex:1">
+    <h1>检索</h1>
+    <p class="small">
+      全文检索
+      {% if embedding_stats.configured %}
+        + 向量检索（{{ embedding_stats.model }}，覆盖 {{ (embedding_stats.coverage * 100)|round(0)|int }}%）
+      {% else %}
+        <span class="faint">· 未配置嵌入模型，当前仅用全文检索</span>
+      {% endif %}
+    </p>
+  </div>
+</div>
+
+<form class="card" method="get" action="{{ url_for('web.search_page') }}">
+  <div class="row">
+    <div style="flex:1; min-width:240px">
+      <input type="text" name="q" value="{{ query }}" autofocus
+             placeholder="搜索论文正文…支持中英文混排">
+    </div>
+    <select name="mode" style="width:auto">
+      <option value="hybrid" {{ 'selected' if mode == 'hybrid' else '' }}>混合</option>
+      <option value="fts" {{ 'selected' if mode == 'fts' else '' }}>仅全文</option>
+      <option value="vector" {{ 'selected' if mode == 'vector' else '' }}>仅向量</option>
+    </select>
+    <button class="btn btn-primary" type="submit">搜索</button>
+  </div>
+</form>
+
+{% if not query %}
+  {# 没输入查询时展示索引状态——用户最常问的是「为什么搜不到东西」 #}
+  <div class="card">
+    <div class="card-head"><h2>索引状态</h2></div>
+    <dl class="kv">
+      <dt>已索引论文</dt>
+      <dd>{{ index_stats.papers_indexed }} 篇
+        {% if index_stats.papers_pending %}
+          <span class="badge badge-warn">{{ index_stats.papers_pending }} 篇待索引</span>
+        {% endif %}
+        {% if index_stats.papers_failed %}
+          <span class="badge badge-danger">{{ index_stats.papers_failed }} 篇失败</span>
+        {% endif %}
+      </dd>
+      <dt>文本分块</dt><dd>{{ index_stats.chunks_paper }} 块</dd>
+      <dt>向量覆盖</dt>
+      <dd>
+        {% if embedding_stats.configured %}
+          {{ embedding_stats.embedded }} / {{ embedding_stats.total }}
+          （{{ (embedding_stats.coverage * 100)|round(0)|int }}%）
+        {% else %}
+          <span class="faint">未启用</span>
+        {% endif %}
+      </dd>
+    </dl>
+
+    {% if index_stats.papers_pending %}
+      <div class="notice notice-warn" style="margin-top:var(--pad-sm)">
+        还有 {{ index_stats.papers_pending }} 篇论文没有建立索引，这些论文的内容搜不到。
+        <form method="post" action="{{ url_for('web.trigger_index') }}" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn" type="submit" style="margin-left:8px">立即索引</button>
+        </form>
+      </div>
+    {% endif %}
+
+    {% if not embedding_stats.configured %}
+      <div class="notice" style="margin-top:var(--pad-sm)">
+        未配置嵌入模型，当前只用全文检索（BM25）。全文检索对**精确术语**效果很好，
+        但同义改写的查询会漏。配置向量嵌入后可以显著改善。
+        <a href="{{ url_for('web.settings_page', tab='embedding') }}">去配置 →</a>
+      </div>
+    {% endif %}
+  </div>
+
+{% elif not hits %}
+  <div class="card">
+    <div class="empty">
+      没有找到匹配「{{ query }}」的内容。
+      <div class="small" style="margin-top:10px">
+        可以试试：换用更短的词、去掉修饰语、或者确认论文是否已完成索引。
+      </div>
+    </div>
+  </div>
+
+{% else %}
+  <p class="small muted">
+    找到 {{ hits|length }} 条结果，用时 {{ elapsed_ms }} ms
+  </p>
+
+  {% for hit in hits %}
+    <div class="card" style="margin-bottom:var(--pad-sm)">
+      <div class="row" style="margin-bottom:6px">
+        <span class="badge badge-info">{{ hit.kind }}</span>
+        {% if hit.paper_title %}
+          <a href="{{ url_for('web.paper_detail', paper_id=hit.paper_id) }}">
+            {{ hit.paper_title[:70] }}</a>
+        {% elif hit.note_title %}
+          <span>{{ hit.note_title }}</span>
+        {% endif %}
+        <span class="spacer"></span>
+        {% if hit.locator %}<span class="badge">{{ hit.locator }}</span>{% endif %}
+        <span class="faint small" title="被哪些检索通道命中">
+          {{ hit.sources|join(' + ') }}
+        </span>
+      </div>
+      {# highlight 过滤器负责「先转义、再标记」——顺序反了就是 XSS #}
+      <div class="small">{{ hit.snippet | highlight }}</div>
+    </div>
+  {% endfor %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}会话 · 知识库{% endblock %}
+
+{% macro citation_cards(citations) %}
+  {% if citations %}
+    <div class="cite-list">
+      {% for cite in citations %}
+        {% set state = cite.check or ('verified' if cite.verified else 'unverified') %}
+        <a class="cite-card cite-{{ state }}"
+           href="{{ url_for('web.paper_detail', paper_id=cite.paper_id) if cite.paper_id else '#' }}"
+           {% if cite.page_from %}title="跳到第 {{ cite.page_from }} 页"{% endif %}>
+          <div class="cite-head">
+            <span class="cite-marker">{{ cite.marker }}</span>
+            <span class="cite-title">{{ cite.title or '（无标题）' }}</span>
+            <span class="cite-state" title="{
+              'verified': '正文里的引文能在被引分块中逐字找到',
+              'unverified': '模型没有给出可核对的引文',
+              'mismatched': '给出的引文在被引分块里找不到——最需要人工核对'
+            }[state]"></span>
+          </div>
+          {% if cite.locator %}<div class="cite-locator mono small">{{ cite.locator }}</div>{% endif %}
+          {% if cite.quote %}<div class="cite-quote small">「{{ cite.quote[:160] }}」</div>{% endif %}
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="chat-layout">
+
+  {# ==================== 左：会话列表 ==================== #}
+  <aside class="chat-side">
+    <div class="chat-side-head">
+      <button class="btn btn-primary" type="button" data-chat-new style="flex:1">＋ 新建会话</button>
+    </div>
+    <div class="chat-side-search">
+      <input type="search" placeholder="搜索会话…" data-chat-search>
+    </div>
+    <div class="chat-list" data-conversation-list>
+      {% for item in conversations %}
+        <a class="chat-item {{ 'is-active' if current and item.id == current.id else '' }}"
+           href="{{ url_for('web.chat_page', c=item.id) }}"
+           data-conversation-id="{{ item.id }}">
+          <div class="chat-item-title">{{ item.title }}</div>
+          <div class="chat-item-meta">{{ item.updated_at|timeago }} · {{ item.messages|length }} 条</div>
+          <button class="chat-item-del" type="button" title="删除这个会话"
+                  data-chat-del="{{ item.id }}">×</button>
+        </a>
+      {% endfor %}
+      {% if not conversations %}
+        <div class="small faint" style="padding:var(--pad-sm)">
+          还没有会话。点上面的「新建会话」开始。
+        </div>
+      {% endif %}
+    </div>
+  </aside>
+
+  {# ==================== 右：消息流 ==================== #}
+  <section class="chat-main">
+    <div class="chat-head">
+      <div style="flex:1; min-width:0">
+        <input type="text" data-chat-title
+               value="{{ current.title if current else '' }}"
+               placeholder="会话标题" style="font-weight:600; border:none; background:none; width:100%"
+               {{ 'disabled' if not current else '' }}>
+        {% if current and current.scope_paper_ids %}
+          <div class="small faint">已限定 {{ current.scope_paper_ids|length }} 篇论文范围</div>
+        {% endif %}
+      </div>
+      {% if current %}
+        <button class="btn btn-ghost" type="button" data-chat-rename title="重命名">重命名</button>
+        <button class="btn btn-danger" type="button" data-chat-delete title="删除这个会话">删除</button>
+      {% endif %}
+    </div>
+
+    <div class="chat-messages" data-chat-messages>
+      {% if not current or not messages %}
+        <div class="chat-empty">
+          <h2>基于你的论文库提问</h2>
+          <p>
+            {% if not current %}先新建一个会话{% else %}这个会话还没有消息{% endif %}。
+            回答会带上可核对的原文出处；可以粘贴图片、附加 PDF，或用 @ 引用某篇论文。
+          </p>
+          <div class="chat-examples" data-chat-examples>
+            <button class="example-chip" type="button">DDPM 为什么用 ε-prediction 而不是预测均值？</button>
+            <button class="example-chip" type="button">世界模型在自动驾驶里是怎么分类的？</button>
+            <button class="example-chip" type="button">对比一下两种扩散模型采样加速方法</button>
+            <button class="example-chip" type="button">UniAD 这篇论文的代码在哪里？</button>
+          </div>
+        </div>
+      {% endif %}
+
+      {% for message in messages %}
+        <div class="msg msg-{{ message.role }}" data-message-id="{{ message.id }}">
+          <div class="msg-role">{{ '我' if message.role == 'user' else 'AI' }}</div>
+          <div class="msg-body">
+            {# 附件缩略图。只显示图片，PDF 用文件名即可——渲染 PDF 首页要额外跑一次解析。 #}
+            {% set images = (message.content or []) | selectattr('type', 'equalto', 'image') | list %}
+            {% for block in images %}
+              <img class="msg-image" alt="粘贴的图片"
+                   src="data:{{ block.source.media_type }};base64,{{ block.source.data }}">
+            {% endfor %}
+            <div class="msg-text">
+              {% if message.role == 'assistant' %}
+                {{ message.text | markdown }}
+              {% else %}
+                {{ message.text }}
+              {% endif %}
+            </div>
+            {% if message.role == 'assistant' %}
+              {{ citation_cards(message.citations) }}
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <button class="chat-scroll-btn" type="button" data-chat-scroll title="回到最新">↓</button>
+
+    {# ==================== 输入区 ==================== #}
+    <div class="chat-composer">
+      <div class="chat-attachments" data-chat-attachments hidden></div>
+      <div class="chat-mention" data-chat-mention hidden></div>
+      <textarea data-chat-input rows="2" {{ 'disabled' if not current else '' }}
+                placeholder="提问…（Enter 发送，Shift+Enter 换行）"></textarea>
+      <div class="row" style="justify-content:space-between; margin-top:7px">
+        <div class="row" style="gap:8px">
+          <label class="btn btn-ghost" style="cursor:pointer; padding:3px 10px; font-size:.85rem">
+            附件
+            <input type="file" data-chat-file hidden
+                   accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"
+                   multiple {{ 'disabled' if not current else '' }}>
+          </label>
+          <span class="chat-hint">可粘贴图片 · @ 引用论文</span>
+          <span class="small faint" data-chat-status></span>
+        </div>
+        <button class="btn btn-primary" type="button" data-chat-send
+                {{ 'disabled' if not current else '' }}>发送</button>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='vendor/vditor/dist/method.min.js') }}"></script>
+  <script type="module">
+    import { createChat } from '{{ url_for('static', filename='js/chat.js') }}';
+    createChat({
+      cdn: '{{ url_for('static', filename='vendor/vditor') }}',
+      currentId: {{ (current.id if current else '') | tojson }},
+      csrfToken: '{{ csrf_token() }}',
+      urls: {
+        create: '{{ url_for('web.chat_create') }}',
+        stream: '{{ url_for('web.chat_stream', conversation_id='__ID__') }}',
+        rename: '{{ url_for('web.chat_rename', conversation_id='__ID__') }}',
+        remove: '{{ url_for('web.chat_delete', conversation_id='__ID__') }}',
+        restream: '{{ url_for('web.chat_restream', conversation_id='__ID__', message_id='_MSGID_') }}',
+        upload: '{{ url_for('web.chat_upload') }}',
+        conversations: '{{ url_for('web.chat_conversations') }}',
+        paperSearch: '{{ url_for('web.chat_paper_search') }}',
+        scope: '{{ url_for('web.chat_set_scope', conversation_id='__ID__') }}',
+        chatPage: '{{ url_for('web.chat_page') }}',
+      },
+    });
+  </script>
+{% endblock %}

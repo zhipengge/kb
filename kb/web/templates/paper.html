@@ -1,0 +1,412 @@
+{% extends "base.html" %}
+{% block title %}{{ paper.title[:60] }} · 知识库{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div style="flex:1; min-width:240px">
+    <div class="small faint">
+      <a href="{{ url_for('web.library') }}">文库</a> /
+      {% if paper.arxiv_id %}<span class="mono">arXiv:{{ paper.arxiv_id }}</span>{% endif %}
+    </div>
+    <h1>{{ paper.title or '（未命名）' }}</h1>
+    <p class="small">
+      {% if paper.year %}{{ paper.year }}{% endif %}
+      {% if paper.venue %} · {{ paper.venue }}{% endif %}
+      {% if paper.reading_status %} · {{ paper.reading_status }}{% endif %}
+      {% if paper.tag_links %} ·
+        {% for link in paper.tag_links[:6] %}
+          <span class="badge" style="background:{{ link.tag.color or 'var(--bg-muted)' }}22;
+                color:{{ link.tag.color or 'var(--text-muted)' }}">{{ link.tag.name }}</span>
+        {% endfor %}
+      {% endif %}
+    </p>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-ghost" type="button" data-wb-focus="left"
+            title="只看原文，折叠右侧面板（快捷键 [ ）">聚焦原文</button>
+    <button class="btn btn-ghost" type="button" data-wb-focus="right"
+            title="只看笔记，折叠左侧面板（快捷键 ] ）">聚焦笔记</button>
+    {% if notes %}
+      <form method="post" action="{{ url_for('web.trigger_read', paper_id=paper.id) }}"
+            onsubmit="return confirm('重新生成会用新产出的内容覆盖当前笔记。\n旧内容会存为历史版本，可在「版本」里找回。\n\n继续？')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-ghost" type="submit"
+                title="重新跑一遍 AI 精读（约 30-60 秒）">重新生成笔记</button>
+      </form>
+    {% endif %}
+    {% if paper.has_file %}
+      <a class="btn" href="{{ url_for('web.paper_file', paper_id=paper.id) }}"
+         download title="下载 PDF 原文件">下载 PDF</a>
+    {% endif %}
+    <form method="post" action="{{ url_for('web.paper_delete', paper_id=paper.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-danger" type="submit"
+              title="只移出文库，磁盘文件与笔记都保留">移出文库</button>
+    </form>
+  </div>
+</div>
+
+{% if paper.deleted_at %}
+  <div class="notice notice-warn">
+    这篇论文已被移出文库（{{ paper.deleted_at|timeago }}）。记录与笔记仍然完整保留。
+    <form method="post" action="{{ url_for('web.paper_restore', paper_id=paper.id) }}"
+          style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn" type="submit" style="margin-left:8px">恢复</button>
+    </form>
+  </div>
+{% endif %}
+
+{% if not paper.has_file %}
+  <div class="notice notice-danger">
+    磁盘上的文件已找不到：<span class="mono small">{{ paper.file_path }}</span>
+    <div class="small" style="margin-top:6px">
+      记录与笔记都还在。把文件放回原处后重新扫描即可恢复关联；
+      若文件已改名或移动，重新扫描会自动按内容识别出来。
+    </div>
+  </div>
+{% endif %}
+
+{% if job_id %}
+  {# 刚点了「生成笔记」。精读要几十秒，没有进度的话用户只会看到页面没反应。 #}
+  <div class="notice" data-job-watch="{{ job_id }}">
+    <div class="row" style="justify-content:space-between">
+      <strong>正在生成笔记…</strong>
+      <span class="small" data-job-message>准备中</span>
+    </div>
+    <div class="progress" style="margin-top:8px">
+      <div class="progress-bar" style="width:0%" data-job-bar></div>
+    </div>
+    <div class="small faint" style="margin-top:6px">
+      这一步会调用模型通读全文，通常需要 30~60 秒。可以先看原文，完成后这个提示会自动消失。
+    </div>
+  </div>
+{% endif %}
+
+<div class="workbench" id="workbench">
+
+  {# ==================== 左：PDF 原文 ==================== #}
+  <div class="wb-panel wb-panel-left">
+    <div class="wb-head">
+      <strong class="small">原文</strong>
+      <div class="reader-toolbar">
+        <button class="btn btn-ghost" type="button" data-reader-prev title="上一页">‹</button>
+        <input type="number" data-reader-page value="1" min="1" aria-label="页码">
+        <span class="small faint">/ <span data-reader-total>—</span></span>
+        <button class="btn btn-ghost" type="button" data-reader-next title="下一页">›</button>
+        <button class="btn btn-ghost" type="button" data-reader-zoom-out title="缩小">−</button>
+        <span class="small faint nowrap" data-reader-zoom>—</span>
+        <button class="btn btn-ghost" type="button" data-reader-zoom-in title="放大">＋</button>
+        <button class="btn btn-ghost" type="button" data-reader-fit title="适应宽度">适应</button>
+      </div>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost" type="button" data-wb-toggle="left"
+              title="折叠原文面板">⟨</button>
+    </div>
+    <div class="wb-body reader-stage" data-reader-stage>
+      {% if paper.has_file %}
+        <canvas data-reader-canvas></canvas>
+      {% else %}
+        <div class="empty" style="align-self:center; color:#e5e7eb">
+          文件不在磁盘上，无法显示原文。
+        </div>
+      {% endif %}
+    </div>
+    <div class="wb-head" style="border-top:1px solid var(--border); border-bottom:none">
+      <span class="small faint" data-reader-status>
+        {% if paper.page_count %}{{ paper.page_count }} 页{% endif %}
+      </span>
+      <span class="spacer"></span>
+      <span class="small faint">
+        方向键翻页 · <kbd>[</kbd> <kbd>]</kbd> 折叠面板
+      </span>
+    </div>
+  </div>
+
+  {# 折叠后的竖条（点击展开） #}
+  <div class="wb-rail wb-rail-left" data-wb-rail="left" title="展开原文面板">
+    <span>›</span><span class="wb-rail-label">原文</span>
+  </div>
+
+  {# ==================== 右：笔记 / 信息 ==================== #}
+  <div class="wb-panel wb-panel-right">
+    <div class="wb-head">
+      <div class="wb-tabs" role="tablist">
+        <button class="wb-tab" type="button" role="tab" data-wb-tab="note">笔记</button>
+        <button class="wb-tab" type="button" role="tab" data-wb-tab="info">信息</button>
+      </div>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost" type="button" data-wb-toggle="right"
+              title="折叠右侧面板">⟩</button>
+    </div>
+
+    {# -------- 笔记：工作台里**直接编辑**，不再跳出去 --------
+       最初的需求就是「原文、笔记同时阅读 + 实时编辑」，只读渲染等于只做到一半：
+       想改一句话就得离开阅读位置，改完回来还得重新找到那一页。 #}
+    <div class="wb-body" data-wb-tabpanel="note" style="display:flex; flex-direction:column">
+      {% if notes %}
+        <div class="wb-head" style="border-bottom:1px solid var(--border); gap:8px">
+          {% if notes|length > 1 %}
+            <select data-note-picker style="flex:1; min-width:0">
+              {% for n in notes %}
+                <option value="{{ url_for('web.paper_detail', paper_id=paper.id, note=n.id) }}"
+                        {{ 'selected' if n.id == active_note.id else '' }}>
+                  {{ (n.title or n.kind)[:46] }}
+                </option>
+              {% endfor %}
+            </select>
+          {% else %}
+            <strong class="small truncate" style="flex:1">
+              {{ active_note.title or '（无标题）' }}
+            </strong>
+          {% endif %}
+          <span class="small faint nowrap" data-editor-status></span>
+          <button class="btn btn-primary" style="padding:3px 12px" type="button"
+                  data-editor-save>保存</button>
+          <a class="btn btn-ghost" style="padding:3px 10px"
+             href="{{ url_for('web.note_detail', note_id=active_note.id) }}"
+             title="完整编辑器：版本历史、磁盘同步、标签">版本</a>
+        </div>
+
+        <div class="note-editor-host">
+          <div id="vditor-mount" class="vditor-mount"></div>
+        </div>
+
+        {# 无 JS 时的退化：至少能读到内容（编辑器挂载失败时也会显示这个） #}
+        <noscript>
+          <div class="wb-body-pad wb-reading">{{ active_note.content_md | markdown }}</div>
+        </noscript>
+      {% else %}
+        <div class="empty">
+          <div>这篇论文还没有笔记。</div>
+          <form method="post" action="{{ url_for('web.trigger_read', paper_id=paper.id) }}"
+                style="display:inline-block; margin-top:14px">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-primary" type="submit"
+                    title="调用模型通读全文并生成结构化笔记，约需 30-60 秒">
+              让 AI 精读并生成笔记
+            </button>
+          </form>
+          <div class="small faint" style="margin-top:10px">
+            也可以自己写一篇 —— 切到「笔记」标签页后直接编辑即可。
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+    {# -------- 信息（元数据 / 状态 / 标签 / 分块） -------- #}
+    <div class="wb-body" data-wb-tabpanel="info" hidden>
+      <div class="wb-body-pad stack">
+
+        <div>
+          <h3>元数据</h3>
+          <form method="post" action="{{ url_for('web.paper_update', paper_id=paper.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="field">
+              <label for="f-title">标题</label>
+              <input type="text" id="f-title" name="title" value="{{ paper.title or '' }}">
+            </div>
+
+            <div class="row" style="gap:var(--pad-sm)">
+              <div class="field" style="flex:1">
+                <label for="f-year">年份</label>
+                <input type="number" id="f-year" name="year" value="{{ paper.year or '' }}"
+                       min="1900" max="2100">
+              </div>
+              <div class="field" style="flex:2">
+                <label for="f-venue">会议 / 期刊</label>
+                <input type="text" id="f-venue" name="venue" value="{{ paper.venue or '' }}">
+              </div>
+            </div>
+
+            <div class="row" style="gap:var(--pad-sm)">
+              <div class="field" style="flex:1">
+                <label for="f-arxiv">arXiv</label>
+                <input type="text" id="f-arxiv" name="arxiv_id" value="{{ paper.arxiv_id or '' }}">
+              </div>
+              <div class="field" style="flex:1">
+                <label for="f-doi">DOI</label>
+                <input type="text" id="f-doi" name="doi" value="{{ paper.doi or '' }}">
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="f-abstract">摘要</label>
+              <textarea id="f-abstract" name="abstract" rows="5"
+                        style="font-family:var(--font-sans)">{{ paper.abstract or '' }}</textarea>
+            </div>
+
+            <div class="row" style="gap:var(--pad-sm)">
+              <div class="field" style="flex:1">
+                <label for="f-reading">阅读状态</label>
+                <select id="f-reading" name="reading_status">
+                  {% for value, label in [('unread','待读'),('reading','在读'),
+                                          ('read','已读'),('reviewed','已复看')] %}
+                    <option value="{{ value }}"
+                            {{ 'selected' if paper.reading_status == value else '' }}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="field" style="flex:1">
+                <label for="f-rating">评分</label>
+                <select id="f-rating" name="rating">
+                  <option value="">未评分</option>
+                  {% for n in range(1, 6) %}
+                    <option value="{{ n }}" {{ 'selected' if paper.rating == n else '' }}>{{ '★' * n }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" type="submit">保存</button>
+          </form>
+        </div>
+
+        <hr class="sep">
+
+        <div>
+          <h3>状态</h3>
+          <dl class="kv">
+            <dt>索引状态</dt>
+            <dd><span class="badge {{ 'badge-ok' if paper.ingest_status == 'indexed'
+                                     else 'badge-warn' if paper.ingest_status == 'pending'
+                                     else 'badge-danger' }}">{{ paper.ingest_status }}</span></dd>
+            <dt>页数</dt><dd>{{ paper.page_count or '—' }}</dd>
+            <dt>文件大小</dt><dd>{{ paper.file_size|human_size }}</dd>
+            <dt>来源</dt><dd>{{ paper.source }}</dd>
+            <dt>入库时间</dt><dd>{{ paper.created_at|timeago }}</dd>
+            {% if paper.file_hash %}
+              <dt>内容哈希</dt><dd class="mono small">{{ paper.file_hash[:16] }}…</dd>
+            {% endif %}
+          </dl>
+          {% if paper.error %}
+            <div class="notice notice-danger" style="margin-top:var(--pad-sm)">{{ paper.error }}</div>
+          {% endif %}
+          {% if paper.meta and paper.meta.title_source == 'filename' %}
+            <div class="notice" style="margin-top:var(--pad-sm)">
+              标题是从文件名推断的（PDF 里没有可用的标题元数据），可以手工改。
+            </div>
+          {% endif %}
+        </div>
+
+        <hr class="sep">
+
+        <div>
+          <h3>标签 <span class="badge">{{ paper.tag_links|length }}</span></h3>
+          {% if paper.tag_links %}
+            <div class="row">
+              {% for link in paper.tag_links %}
+                <span class="badge" style="background:{{ link.tag.color or 'var(--bg-muted)' }}22;
+                      color:{{ link.tag.color or 'var(--text-muted)' }}"
+                      title="{{ link.tag.dimension }} · 来源：{{ link.source }}">
+                  {{ link.tag.name }}
+                </span>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="small faint">
+              还没有标签。标签可以由 AI 建议（需先配置模型），也可以手工添加。
+            </div>
+          {% endif %}
+        </div>
+
+        {% if chunks %}
+          <hr class="sep">
+          <div>
+            <h3>正文分块 <span class="badge">{{ chunks|length }}</span></h3>
+            <p class="small muted">
+              每块都记录了自己来自哪一页哪一节，检索结果的引用定位靠的就是它。
+            </p>
+            {% for chunk in chunks[:8] %}
+              <div style="margin-bottom:8px">
+                <div class="small">{{ chunk.text[:110] }}{% if chunk.text|length > 110 %}…{% endif %}</div>
+                <div class="small faint mono">{{ chunk.locator or '—' }}</div>
+              </div>
+            {% endfor %}
+            {% if chunks|length > 8 %}
+              <div class="small faint">…共 {{ chunks|length }} 块</div>
+            {% endif %}
+          </div>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+
+  {# 折叠后的竖条 #}
+  <div class="wb-rail wb-rail-right" data-wb-rail="right" title="展开笔记面板">
+    <span>‹</span><span class="wb-rail-label">笔记</span>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {% if active_note %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/vditor/dist/index.css') }}">
+    <script src="{{ url_for('static', filename='vendor/vditor/dist/index.min.js') }}"></script>
+  {% endif %}
+  <script type="module">
+    import { createWorkbench } from '{{ url_for('static', filename='js/workbench.js') }}';
+    createWorkbench(document.getElementById('workbench'));
+
+    {% if paper.has_file %}
+      import { createReader } from '{{ url_for('static', filename='js/reader.js') }}';
+      createReader(
+        document.getElementById('workbench'),
+        {{ url_for('web.paper_file', paper_id=paper.id) | tojson }}
+      );
+    {% endif %}
+
+    {% if active_note %}
+      import { createNoteEditor } from '{{ url_for('static', filename='js/note-editor.js') }}';
+      createNoteEditor({
+        mountId: 'vditor-mount',
+        cdn: '{{ url_for('static', filename='vendor/vditor') }}',
+        saveUrl: '{{ url_for('web.note_save', note_id=active_note.id) }}',
+        csrfToken: '{{ csrf_token() }}',
+        value: {{ (active_note.content_md or '') | tojson }},
+        version: {{ active_note.version }},
+        // 工作台里没有 <form>（保存走 fetch），所以不传 formId。
+        // 编辑器的保存逻辑对这两种情况都成立。
+      });
+
+      // 切换笔记用整页跳转而不是原地换编辑器：笔记的版本号、标签、
+      // 版本历史都是按笔记加载的，原地换会留下上一本的陈旧状态。
+      document.querySelector('[data-note-picker]')?.addEventListener('change', (e) => {
+        window.location.href = e.target.value;
+      });
+    {% endif %}
+
+    {% if job_id %}
+      // 轮询精读进度。完成后整页刷新——新笔记要重新渲染，且编辑器
+      // 需要拿到新的版本号（否则第一次保存会被乐观锁挡下来）。
+      const watcher = document.querySelector('[data-job-watch]');
+      const jobId = {{ job_id | tojson }};
+      const statusUrl = {{ url_for('web.job_status', job_id=job_id) | tojson }};
+      const bar = watcher.querySelector('[data-job-bar]');
+      const msgEl = watcher.querySelector('[data-job-message]');
+      const timer = setInterval(async () => {
+        try {
+          const response = await fetch(statusUrl, { headers: { Accept: 'application/json' } });
+          const data = await response.json();
+          if (!data.ok) { clearInterval(timer); return; }
+          bar.style.width = `${Math.round((data.progress || 0) * 100)}%`;
+          if (data.message) msgEl.textContent = data.message;
+          if (!data.finished) return;
+          clearInterval(timer);
+          if (data.status === 'succeeded') {
+            window.location.reload();
+          } else {
+            msgEl.textContent = data.error || `任务${data.status}`;
+            watcher.classList.add('notice-danger');
+          }
+        } catch {
+          /* 网络抖一下不影响，下一轮再试 */
+        }
+      }, 2500);
+    {% endif %}
+  </script>
+{% endblock %}

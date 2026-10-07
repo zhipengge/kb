@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}重复论文 · 知识库{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>重复论文</h1>
+    <p>内容或标识符相同的论文。合并会保留其一的记录，并把笔记转移过去。</p>
+  </div>
+</div>
+
+{% if duplicates %}
+  <div class="notice">
+    合并时**被弃用的那条只是移出文库**（软删除），磁盘文件不动，
+    误操作可以恢复。两篇的笔记都会归到保留的那篇名下。
+  </div>
+
+  {% for dup, left, right in duplicates %}
+    <div class="card" style="margin-bottom:var(--pad)">
+      <div class="card-head">
+        <div>
+          <span class="badge badge-warn">
+            {% if dup.reason == 'exact_hash' %}内容完全相同
+            {% elif dup.reason == 'doi' %}DOI 相同
+            {% elif dup.reason == 'arxiv' %}arXiv 号相同
+            {% else %}标题相似（{{ dup.score|round(0)|int }} 分）{% endif %}
+          </span>
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        {% for paper, side in [(left, 'left'), (right, 'right')] %}
+          <div class="card" style="background:var(--bg-subtle)">
+            <div class="small faint">
+              {{ 'A' if side == 'left' else 'B' }} · 入库于 {{ paper.created_at|timeago }}
+            </div>
+            <h3 style="margin-top:4px">
+              <a href="{{ url_for('web.paper_detail', paper_id=paper.id) }}">
+                {{ paper.title or '（未命名）' }}</a>
+            </h3>
+            <dl class="kv">
+              <dt>年份</dt><dd>{{ paper.year or '—' }}</dd>
+              <dt>arXiv</dt><dd class="mono">{{ paper.arxiv_id or '—' }}</dd>
+              <dt>DOI</dt><dd class="mono">{{ paper.doi or '—' }}</dd>
+              <dt>文件</dt>
+              <dd class="mono small" style="word-break:break-all">{{ paper.file_path }}</dd>
+              <dt>笔记</dt><dd>{{ paper.notes|length }} 篇</dd>
+            </dl>
+            <form method="post" action="{{ url_for('web.resolve_duplicate_view', dup_id=dup.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="action" value="keep_{{ side }}">
+              <button class="btn" type="submit">保留这篇</button>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="btn-row" style="margin-top:var(--pad-sm)">
+        <form method="post" action="{{ url_for('web.resolve_duplicate_view', dup_id=dup.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="dismiss">
+          <button class="btn" type="submit"
+                  title="确认它们是两篇不同的论文，不再提示">不是重复，忽略</button>
+        </form>
+      </div>
+    </div>
+  {% endfor %}
+
+{% else %}
+  <div class="card">
+    <div class="empty">
+      没有待处理的重复论文。<br>
+      <span class="small">
+        扫描时会自动检测内容相同、DOI / arXiv 号相同、以及标题高度相似的论文。
+      </span>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

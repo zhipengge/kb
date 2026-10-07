@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}任务 · 知识库{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>任务</h1>
+    <p>后台任务队列（扫描、解析、建索引、深度阅读）</p>
+  </div>
+</div>
+
+<nav class="tabs">
+  <a class="tab {{ 'active' if not status else '' }}" href="{{ url_for('web.jobs_page') }}">
+    全部
+  </a>
+  {% for key, label in [('running','进行中'), ('queued','排队中'),
+                        ('succeeded','已完成'), ('failed','失败'), ('cancelled','已取消')] %}
+    <a class="tab {{ 'active' if status == key else '' }}"
+       href="{{ url_for('web.jobs_page', status=key) }}">
+      {{ label }}
+      {% if counts.get(key) %}<span class="badge">{{ counts[key] }}</span>{% endif %}
+    </a>
+  {% endfor %}
+</nav>
+
+<div class="card">
+  {% if jobs %}
+    <table>
+      <thead>
+        <tr>
+          <th>任务</th>
+          <th>状态</th>
+          <th class="num">进度</th>
+          <th>创建时间</th>
+          <th class="num">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for job in jobs %}
+        <tr>
+          <td>
+            <div class="mono small">{{ job.type }}</div>
+            <div class="small faint mono">{{ job.id }}</div>
+            {% if job.message %}<div class="small muted truncate">{{ job.message }}</div>{% endif %}
+            {% if job.error %}
+              <div class="small" style="color:var(--danger)">{{ job.error }}</div>
+            {% endif %}
+          </td>
+          <td>
+            <span class="status status-{{ job.status }}">{{ job.status }}</span>
+            {% if job.attempts > 1 %}
+              <div class="small faint">第 {{ job.attempts }} 次尝试</div>
+            {% endif %}
+          </td>
+          <td class="num">
+            {% if job.status == 'running' %}
+              <div class="progress"><div class="progress-bar"
+                   style="width: {{ (job.progress * 100)|round(1) }}%"></div></div>
+              <div class="small faint">{{ (job.progress * 100)|round(0)|int }}%</div>
+            {% elif job.status == 'succeeded' %}
+              <span class="badge badge-ok">完成</span>
+            {% else %}
+              <span class="faint">—</span>
+            {% endif %}
+          </td>
+          <td class="small faint nowrap">{{ job.created_at|timeago }}</td>
+          <td class="num">
+            <div class="btn-row" style="justify-content:flex-end">
+              {% if not job.is_terminal %}
+                <form method="post" action="{{ url_for('web.cancel_job_view', job_id=job.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-danger" type="submit"
+                          title="任务会在下一个阶段边界停止">取消</button>
+                </form>
+              {% else %}
+                <form method="post" action="{{ url_for('web.retry_job_view', job_id=job.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn" type="submit" title="用相同参数重新入队">重跑</button>
+                </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="empty">
+      暂无任务。<br>
+      到<a href="{{ url_for('web.dashboard') }}">概览</a>页点「扫描目录」试试。
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

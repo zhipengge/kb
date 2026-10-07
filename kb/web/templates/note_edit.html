@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}{{ note.title[:50] }} · 笔记{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div style="flex:1; min-width:280px">
+    <div class="small faint">
+      <a href="{{ url_for('web.notes_page') }}">笔记</a> /
+      {% if paper %}
+        <a href="{{ url_for('web.paper_detail', paper_id=paper.id) }}">{{ paper.title[:44] }}</a> /
+      {% endif %}
+      版本 {{ note.version }}
+    </div>
+    <h1>{{ note.title or '（无标题）' }}</h1>
+  </div>
+  <div class="btn-row">
+    {% if note.file_path %}
+      <span class="badge {{ 'badge-ok' if sync_state == 'clean'
+                            else 'badge-danger' if sync_state == 'conflict'
+                            else 'badge-warn' }}"
+            title="{{ note.file_path }}">
+        {% if sync_state == 'clean' %}已同步
+        {% elif sync_state == 'modified' %}磁盘有更新
+        {% elif sync_state == 'dirty' %}库有未写出的改动
+        {% elif sync_state == 'conflict' %}存在冲突
+        {% else %}文件缺失{% endif %}
+      </span>
+    {% endif %}
+    <form method="post" action="{{ url_for('web.note_delete_view', note_id=note.id) }}"
+          onsubmit="return confirm('确定删除这篇笔记？磁盘文件会保留，可手动恢复。')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-danger" type="submit">删除</button>
+    </form>
+  </div>
+</div>
+
+{% if note.sync_error %}
+  <div class="notice notice-danger">
+    {{ note.sync_error }}
+    {% if sync_state == 'conflict' %}
+      <div class="small" style="margin-top:6px">
+        磁盘上的版本已经另存到笔记目录的 <span class="mono">_conflicts/</span> 下。
+        这里显示的是库里保留的版本——需要磁盘那一版的话，去那个文件里复制回来即可。
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
+
+<div class="grid" style="grid-template-columns: minmax(0, 2.2fr) minmax(240px, 1fr)">
+  {# ---------------- 编辑器 ---------------- #}
+  <div class="card">
+    {# 这个 form 是**无 JS 时的退化路径**：脚本没跑起来时，它仍然能提交保存。
+       正常情况下由 note-editor.js 接管，走 fetch 后台保存，不重定向。 #}
+    <form method="post" action="{{ url_for('web.note_save', note_id=note.id) }}"
+          id="note-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {# 乐观锁：带上读到的版本号。期间有别的改动会被拒绝而不是覆盖。 #}
+      <input type="hidden" name="version" value="{{ note.version }}">
+
+      <div class="field">
+        <input type="text" name="title" value="{{ note.title or '' }}"
+               placeholder="笔记标题" style="font-size:1.05rem; font-weight:600">
+      </div>
+
+      {# Vditor 挂载点。编辑与预览合一（IR 模式）：Markdown 标记自动隐去，
+         光标移进去时重新展开，不需要右侧再来一份预览。 #}
+      <div id="vditor-mount" class="vditor-mount"></div>
+
+      {# 挂载失败或禁用 JS 时用它提交；脚本接管后会把内容同步进来 #}
+      <textarea name="content_md" id="note-content-fallback" hidden
+                spellcheck="false">{{ note.content_md or '' }}</textarea>
+
+      <div class="row" style="margin-top:var(--pad-sm)">
+        <div style="flex:1">
+          <label for="f-kind">类型</label>
+          <select id="f-kind" name="kind">
+            {% for value, label in [('manual','手写'),('summary','摘要'),('deep_read','深度阅读'),
+                                    ('code_review','代码对照'),('qa','问答'),('insight','想法')] %}
+              <option value="{{ value }}" {{ 'selected' if note.kind == value else '' }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="flex:1">
+          <label for="f-status">状态</label>
+          <select id="f-status" name="status">
+            <option value="draft" {{ 'selected' if note.status == 'draft' else '' }}>草稿</option>
+            <option value="published" {{ 'selected' if note.status == 'published' else '' }}>已定稿</option>
+          </select>
+        </div>
+        <div style="flex:0 0 auto; align-self:flex-end">
+          <span class="small faint" data-editor-status style="margin-right:8px"></span>
+          <button class="btn btn-primary" type="button" data-editor-save>保存</button>
+        </div>
+      </div>
+      <div class="field-help">
+        编辑即预览：Markdown 标记会在光标移开时隐去，移入时重新显示。
+        公式用 <span class="mono">$…$</span>，双链用 <span class="mono">[[笔记标题]]</span>。
+        <kbd>Ctrl</kbd>+<kbd>S</kbd> 保存。
+      </div>
+    </form>
+  </div>
+
+  {# ---------------- 侧栏 ---------------- #}
+  <div class="stack">
+
+    <div class="card">
+      <div class="card-head">
+        <h3>版本历史</h3>
+        <span class="badge">{{ revisions|length }}</span>
+      </div>
+      {% if revisions %}
+        <table>
+          <tbody>
+          {% for rev in revisions %}
+            <tr>
+              <td>
+                <div class="small">v{{ rev.version }} · {{ rev.summary or '—' }}</div>
+                <div class="small faint">{{ rev.created_at|timeago }} · {{ rev.author or '—' }}</div>
+              </td>
+              <td class="num nowrap">
+                <a class="btn btn-ghost" title="与当前内容对比"
+                   href="{{ url_for('web.note_detail', note_id=note.id, compare=rev.version) }}">对比</a>
+                <form method="post" style="display:inline"
+                      action="{{ url_for('web.note_restore_view', note_id=note.id, version=rev.version) }}"
+                      onsubmit="return confirm('回滚到 v{{ rev.version }}？当前内容会先存为快照。')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-ghost" type="submit">回滚</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="small faint">还没有历史版本。修改并保存后会开始记录。</div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>标签</h3></div>
+      {% if note.tag_links %}
+        <div class="row">
+          {% for link in note.tag_links %}
+            <span class="badge" style="background:{{ link.tag.color or 'var(--bg-muted)' }}22;
+                  color:{{ link.tag.color or 'var(--text-muted)' }}">{{ link.tag.name }}</span>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="small faint">还没有标签。</div>
+      {% endif %}
+      <div class="field-help">
+        在 <a href="{{ url_for('web.tags_page') }}">标签页</a> 管理词表。
+      </div>
+    </div>
+
+    {% if note.file_path %}
+      <div class="card">
+        <div class="card-head"><h3>磁盘文件</h3></div>
+        <div class="mono small" style="word-break:break-all">{{ note.file_path }}</div>
+        <div class="field-help">
+          用 Obsidian 等工具直接编辑这个文件，回到这里点「与磁盘同步」即可读入。
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if diff_text is not none %}
+  <div class="card" style="margin-top:var(--pad)">
+    <div class="card-head">
+      <h2>版本对比：v{{ compare_version }} → 当前</h2>
+      <a class="btn" href="{{ url_for('web.note_detail', note_id=note.id) }}">关闭</a>
+    </div>
+    <pre class="mono small" style="max-height:420px; overflow:auto">{% for line in diff_text.splitlines() %}<span
+      {%- if line.startswith('+') and not line.startswith('+++') %} style="color:var(--ok)"
+      {%- elif line.startswith('-') and not line.startswith('---') %} style="color:var(--danger)"
+      {%- elif line.startswith('@@') %} style="color:var(--accent)"
+      {%- endif %}>{{ line }}</span>
+{% endfor %}</pre>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/vditor/dist/index.css') }}">
+  {# Vditor 是普通脚本（非 module），必须先于 module 脚本同步加载，
+     否则 module 里访问 window.Vditor 时它还没定义。 #}
+  <script src="{{ url_for('static', filename='vendor/vditor/dist/index.min.js') }}"></script>
+  <script type="module">
+    import { createNoteEditor } from '{{ url_for('static', filename='js/note-editor.js') }}';
+
+    const editor = createNoteEditor({
+      mountId: 'vditor-mount',
+      // 指向本地。Vditor 会自己拼 `${cdn}/dist/js/...` 去懒加载
+      // lute 引擎、图标和 KaTeX——默认是 unpkg，内网部署会卡在半路。
+      cdn: '{{ url_for('static', filename='vendor/vditor') }}',
+      saveUrl: '{{ url_for('web.note_save', note_id=note.id) }}',
+      csrfToken: '{{ csrf_token() }}',
+      value: {{ (note.content_md or '') | tojson }},
+      version: {{ note.version }},
+      formId: 'note-form',
+    });
+
+    // 走了退化路径（Vditor 没加载出来）时，把 textarea 填上当前内容再提交，
+    // 否则用户会保存到一份陈旧的正文。
+    document.getElementById('note-form')?.addEventListener('submit', () => {
+      const fallback = document.getElementById('note-content-fallback');
+      if (editor && fallback) fallback.value = editor.value;
+    });
+  </script>
+{% endblock %}

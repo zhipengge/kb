@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+{#-
+  主题在 <html> 上以 data-theme 属性表达，并且**在首屏渲染前**由服务端写死。
+  如果用 JS 在加载后切换，暗色模式用户每次刷新都会先闪一下白屏——
+  这个细节决定了整个应用「显不显专业」。
+-#}
+<html lang="zh-CN"
+      data-theme="{{ theme if theme != 'system' else 'light' }}"
+      data-theme-mode="{{ theme }}"
+      data-accent="{{ accent }}"
+      data-font-size="{{ font_size }}"
+      data-density="{{ density }}"
+      data-radius="{{ radius }}"
+      {# 阅读区（笔记正文、论文摘要）的正文字体。长文阅读用衬线更省力，
+         所以这是一个独立于界面字体的设置，只作用于 .wb-reading。 #}
+      style="--font-reader: var(--font-{{ 'serif' if reader_font == 'serif' else 'sans' }})">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}知识库{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  {# KaTeX 样式。论文公式以原始 LaTeX 保存，靠它渲染成真正的数学排版。 #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/katex.min.css') }}">
+  {% block head %}{% endblock %}
+  <script>
+    // 「跟随系统」模式下，在样式生效前就把真实主题定下来，避免闪烁。
+    (function () {
+      var mode = document.documentElement.dataset.themeMode;
+      if (mode === 'system') {
+        var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      }
+    })();
+  </script>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="{{ url_for('web.dashboard') }}">
+    <span class="brand-mark">kb</span>
+    <span class="brand-name">论文知识库</span>
+  </a>
+
+  <nav class="nav">
+    {# 文库与笔记合并成「文库」一个入口：阅读时原文和笔记本来就该在同一页，
+       分成两个导航项会让人以为它们是两件事。全部笔记页仍可直达（文库页有入口），
+       因为不关联论文的独立笔记需要一个落脚点。 #}
+    {% set nav_items = [
+      ('web.dashboard', '概览', []),
+      ('web.library', '文库', ['web.paper_detail', 'web.notes_page', 'web.note_detail']),
+      ('web.chat_page', '会话', ['web.chat_conversations', 'web.chat_conversation',
+                                 'web.chat_create', 'web.chat_rename', 'web.chat_delete',
+                                 'web.chat_stream', 'web.chat_upload']),
+      ('web.search_page', '检索', []),
+      ('web.tags_page', '标签', []),
+      ('web.jobs_page', '任务', []),
+      ('web.about', '关于', []),
+    ] %}
+    {% for endpoint, label, also_active in nav_items %}
+      <a href="{{ url_for(endpoint) }}"
+         class="nav-link {{ 'active' if request.endpoint == endpoint
+                              or request.endpoint in also_active else '' }}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+
+  <div class="topbar-actions">
+    <button type="button" class="btn btn-ghost" id="theme-toggle"
+            title="切换主题（当前：{{ theme }}）" aria-label="切换主题">
+      <span class="theme-icon" data-theme="light">☀</span>
+      <span class="theme-icon" data-theme="dark">☾</span>
+    </button>
+    <a class="btn btn-ghost" href="{{ url_for('web.settings_page') }}"
+       title="设置">⚙</a>
+  </div>
+</header>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="flashes">
+      {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<main class="content">
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="footer">
+  <span>kb {{ kb_version }}</span>
+  <span class="dot">·</span>
+  <a href="{{ url_for('web.about') }}">运行状态</a>
+</footer>
+
+<script src="{{ url_for('static', filename='vendor/htmx.min.js') }}" defer></script>
+<script src="{{ url_for('static', filename='vendor/katex.min.js') }}" defer></script>
+<script src="{{ url_for('static', filename='vendor/katex-auto-render.min.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

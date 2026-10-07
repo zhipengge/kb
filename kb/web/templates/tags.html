@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{#-
+  标签渲染宏。层级标签用宏递归展开，不用 Jinja 的 recursive 循环——
+  后者要在循环里引用自身，处理「渲染节点 + 再渲染子节点」时不容易读。
+-#}
+{% macro render_tag(node) %}
+  <span class="badge" style="background:{{ node.color or 'var(--accent-soft)' }}22;
+        color:{{ node.color or 'var(--accent)' }}; font-size:.82rem"
+        title="{{ node.dimension }} · 使用 {{ node.usage_count }} 次">
+    {% if node.depth %}<span class="faint">└</span>{% endif %}
+    {{ node.name }}
+    {% if node.usage_count %}<span class="faint">{{ node.usage_count }}</span>{% endif %}
+    <form method="post" style="display:inline"
+          action="{{ url_for('web.tag_delete_view', tag_id=node.id) }}"
+          onsubmit="return confirm('删除标签「{{ node.name }}」？所有关联会一并解除。')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit"
+              style="border:none;background:none;cursor:pointer;padding:0 0 0 4px;
+                     color:inherit;font:inherit" title="删除">×</button>
+    </form>
+  </span>
+  {% for child in node.children %}{{ render_tag(child) }}{% endfor %}
+{% endmacro %}
+
+{% block title %}标签 · 知识库{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>标签</h1>
+    <p>共 {{ tag_count }} 个标签 · 按维度分组管理</p>
+  </div>
+</div>
+
+{# ---------------- AI 建议队列 ----------------
+   这是「防止标签爆炸」的执行点：模型可以自由提议，但决定权在人手里。 #}
+{% if suggestions %}
+  <div class="card" style="margin-bottom:var(--pad)">
+    <div class="card-head">
+      <h2>AI 建议（{{ suggestions|length }}）</h2>
+      <form method="post" action="{{ url_for('web.accept_all_suggestions_view') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn" type="submit">全部接受</button>
+      </form>
+    </div>
+    <p class="small muted">
+      接受后标签会归入词表（同名或同别名的会自动合并到已有标签）。
+      拒绝过的词以后不会再被建议。
+    </p>
+    <table>
+      <thead>
+        <tr><th>建议标签</th><th>维度</th><th>理由</th><th class="num">操作</th></tr>
+      </thead>
+      <tbody>
+      {% for s in suggestions %}
+        <tr>
+          <td>
+            <b>{{ s.name }}</b>
+            {% if s.suggested_tag_id %}
+              <span class="badge badge-info" title="这个词已经是某个标签的别名，接受后不会新建标签">
+                已有关联标签</span>
+            {% endif %}
+          </td>
+          <td><span class="badge">{{ s.dimension }}</span></td>
+          <td class="small muted">
+            {{ s.rationale or '—' }}
+            {% if s.confidence %}
+              <span class="faint">· 置信度 {{ (s.confidence * 100)|round(0)|int }}%</span>
+            {% endif %}
+          </td>
+          <td class="num nowrap">
+            <form method="post" style="display:inline"
+                  action="{{ url_for('web.resolve_suggestion_view', suggestion_id=s.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="action" value="accept">
+              <button class="btn btn-primary" type="submit">接受</button>
+            </form>
+            <form method="post" style="display:inline"
+                  action="{{ url_for('web.resolve_suggestion_view', suggestion_id=s.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="action" value="reject">
+              <button class="btn" type="submit">拒绝</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% if suggestion_stats.rejected %}
+      <div class="field-help">已拒绝 {{ suggestion_stats.rejected }} 条（这些词不会再被建议）。</div>
+    {% endif %}
+  </div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head"><h2>新建标签</h2></div>
+  <form method="post" action="{{ url_for('web.tag_create_view') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row">
+      <div style="flex:2; min-width:160px">
+        <input type="text" name="name" placeholder="标签名（可中文）" required>
+      </div>
+      <div style="flex:1">
+        <select name="dimension">
+          {% for value, label in dimensions %}
+            <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="btn btn-primary" type="submit">添加</button>
+    </div>
+    <div class="field-help">
+      维度用来区分同名的不同含义——「Transformer」作为<b>方法</b>和作为<b>领域</b>是两个标签。
+      筛选器按维度分组展示。
+    </div>
+  </form>
+</div>
+
+{% for dimension, label in dimensions %}
+  {% set nodes = tree.get(dimension, []) %}
+  <div class="card" style="margin-top:var(--pad)">
+    <div class="card-head">
+      <h2>{{ label }}</h2>
+      <span class="badge">{{ nodes|length }}</span>
+    </div>
+    {% if nodes %}
+      <div class="row">
+        {% for node in nodes %}{{ render_tag(node) }}{% endfor %}
+      </div>
+    {% else %}
+      <div class="small faint">这个维度下还没有标签。</div>
+    {% endif %}
+  </div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}添加论文 · 知识库{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="small faint"><a href="{{ url_for('web.library') }}">文库</a> / 添加论文</div>
+    <h1>添加论文</h1>
+    <p>粘贴 arXiv 链接、arXiv 编号，或者直接输入论文标题</p>
+  </div>
+</div>
+
+<div class="add-layout">
+  <div class="card">
+    <form method="post" action="{{ url_for('web.paper_add') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label for="f-q">链接 / 编号 / 标题</label>
+        <input type="text" id="f-q" name="q" value="{{ query }}" autofocus
+               placeholder="https://arxiv.org/abs/2212.10156　或　2212.10156　或　Planning-oriented Autonomous Driving">
+        <div class="field-help">
+          中文标题也能匹配，但英文原名识别得更准——arXiv 的检索是按英文术语建的。
+        </div>
+      </div>
+      <button class="btn btn-primary" type="submit">查找</button>
+    </form>
+
+    <hr class="sep">
+
+    <div>
+      <h3 style="margin-bottom:8px">或者直接上传 PDF</h3>
+      <form method="post" action="{{ url_for('web.paper_upload') }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="row">
+          <input type="file" name="file" accept="application/pdf,.pdf" required style="flex:1">
+          <button class="btn" type="submit">上传</button>
+        </div>
+        <div class="field-help">
+          本地的 PDF 用这种方式。它会直接入库并解析，不走 arXiv。
+        </div>
+      </form>
+    </div>
+
+    <hr class="sep">
+
+    <div class="small faint">
+      <strong>论文很多？</strong>把 PDF 放进配置的论文目录，再回
+      <a href="{{ url_for('web.library') }}">文库</a>点「扫描目录」——扫描会递归查找并自动去重。
+    </div>
+  </div>
+
+  {# -------------------- 解析结果 -------------------- #}
+  <div>
+    {% if error %}
+      <div class="notice notice-warn">
+        <h3>没找到匹配的论文</h3>
+        <div style="margin-top:6px">{{ error }}</div>
+        <div class="small" style="margin-top:10px">
+          可以试试：换成 arXiv 编号（最准确）、用英文原标题、
+          或者确认这篇论文是否在 arXiv 上（部分期刊论文只有 DOI 没有预印本）。
+        </div>
+      </div>
+    {% endif %}
+
+    {% if candidate %}
+      <div class="card">
+        <div class="card-head"><h2>找到这篇，确认一下</h2></div>
+        <div class="stack">
+          <div>
+            <div style="font-weight:600; line-height:1.5">{{ candidate.title }}</div>
+            <div class="small faint" style="margin-top:4px">
+              {% if candidate.authors %}{{ candidate.authors[:6]|join('、') }}{% endif %}
+              {% if candidate.published %} · {{ candidate.published[:10] }}{% endif %}
+            </div>
+          </div>
+
+          <dl class="kv">
+            <dt>arXiv 编号</dt><dd class="mono">{{ candidate.arxiv_id }}</dd>
+            {% if candidate.categories %}
+              <dt>分类</dt><dd>{{ candidate.categories[:3]|join('、') }}</dd>
+            {% endif %}
+            {% if candidate.published %}
+              <dt>提交时间</dt><dd>{{ candidate.published[:10] }}</dd>
+            {% endif %}
+          </dl>
+
+          {# 匹配度在这里不做数字化展示：resolve_arxiv 内部有阈值与模糊匹配，
+             但把「87%」摆在界面上会给人一个精确的错觉，而实际该做的是
+             让人对一眼标题。所以只给提醒，不给分数。 #}
+          <div class="notice notice-warn">
+            <strong>请核对标题是否确实是你要找的那篇。</strong>
+            <div class="small" style="margin-top:4px">
+              这是按标题在 arXiv 上检索的结果，偶尔会匹配到相近但不同的论文。
+              编号是最可靠的标识——如果你手上有编号，直接用它更稳妥。
+            </div>
+          </div>
+
+          {% if candidate.summary %}
+            <details>
+              <summary class="small muted" style="cursor:pointer">查看摘要</summary>
+              <div class="small" style="margin-top:8px; line-height:1.7">{{ candidate.summary[:1200] }}</div>
+            </details>
+          {% endif %}
+
+          <div class="notice">
+            确认后会下载 PDF（约 10~30 秒）并自动解析正文、建立检索索引。
+            <span class="small faint">下载和解析在后台进行，可以先去忙别的。</span>
+          </div>
+
+          <div class="row">
+            <form method="post" action="{{ url_for('web.paper_add_confirm') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="arxiv_id" value="{{ candidate.arxiv_id }}">
+              <input type="hidden" name="title" value="{{ candidate.title }}">
+              <button class="btn btn-primary" type="submit">就是这篇，下载入库</button>
+            </form>
+            <a class="btn btn-ghost" href="{{ url_for('web.paper_add') }}">不是，重新找</a>
+            <a class="btn btn-ghost" href="https://arxiv.org/abs/{{ candidate.arxiv_id }}"
+               target="_blank" rel="noopener">去 arXiv 看一眼</a>
+          </div>
+        </div>
+      </div>
+    {% elif not error %}
+      <div class="card">
+        <div class="empty">
+          输入链接或标题后点「查找」，这里会显示匹配到的论文供你确认。<br>
+          <span class="small faint">先确认再下载——标题匹配偶尔会认错，下载前看一眼比事后发现容易。</span>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
