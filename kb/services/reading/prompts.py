@@ -433,6 +433,49 @@ TAG_INSTRUCTIONS = "请调用 submit_result 工具提交标签。3-6 个，宁�
 # --------------------------------------------------------------------------
 
 
+def _cut_at_boundary(text: str, budget: int) -> str:
+    """把正文截到 budget 以内，**在段落或句子边界处切断**。
+
+    原先是 ``text[:budget]`` 硬切，模型看到的结尾是半个词——实测笔记里
+    直接引用了这种断口：「所提供节选在该句处截断（止于 *where μ and Σ are
+    arbi…*）」「提供的原文在此处被截断（'from both ImageNet a'）」。
+    全库 33 处 ``⚠️`` 就是在抱怨这个。
+
+    优先段落、其次句子、最后词边界。都找不到才硬切。
+    """
+    if len(text) <= budget:
+        return text
+    head = text[:budget]
+
+    cut = head.rfind("\n\n")
+    if cut >= budget * 0.5:
+        return head[:cut].rstrip()
+
+    for sep in ("。", "！", "？", ". ", "! ", "? ", "；", "; "):
+        cut = head.rfind(sep)
+        if cut >= budget * 0.5:
+            return head[: cut + len(sep)].rstrip()
+
+    cut = head.rfind(" ")
+    if cut >= budget * 0.4:
+        return head[:cut].rstrip()
+    return head
+
+
+# 正文被截断时附在结尾的说明。
+#
+# **这一句不能省。** 只把切口修整齐会更危险：半个单词的断口至少一眼看得出断了，
+# 而一个刚好落在段落边界的结尾看起来就是**完整的**——模型会把「没给它的部分」
+# 当成「论文没写」，那是比截断本身严重得多的错误。
+# 明确告诉它这是节选，「本文未给出 X」才是一个可信的结论。
+_EXCERPT_NOTE = (
+    "\n\n---\n"
+    "（说明：以上是论文正文的节选。受长度限制，部分小节未包含在内。"
+    "凡是这里没有的内容，只能说明「本次提供的节选里没有」，"
+    "**不能据此判定论文没写**；遇到这种情况请标为待核而不是下结论。）"
+)
+
+
 def build_paper_context(
     *,
     title: str,
@@ -460,6 +503,10 @@ def build_paper_context(
 
     if abstract:
         parts.append(f"## 摘要\n{abstract.strip()}")
+
+    # 有多少该给的小节没进上下文。定义在 if 之外，结尾要用它决定
+    # 是否附上「这是节选」的说明。
+    excerpt_dropped = 0
 
     if sections:
         budget = max_chars
@@ -503,21 +550,29 @@ def build_paper_context(
             return 1.0
 
         ranked = sorted(sections, key=weight, reverse=True)
+        # 只统计「本来该给」的小节（权重 > 0）——参考文献、致谢是被**有意**排除的，
+        # 不算节选损失，否则那句说明会永远挂在那儿，反而变得没有信息量。
+        wanted = [s for s in ranked if weight(s) > 0 and (s.get("text") or "").strip()]
         chosen: list[dict] = []
-        for section in ranked:
+        # 剩余预算少于这个数就干脆不再收小节了。
+        # 否则会塞进一小段残片（实测出现过只有九个字符的 `We perfor`）——
+        # 那种片段不含信息，却会让模型以为这一节就长这样。
+        min_useful = 300
+        for section in wanted:
             text = (section.get("text") or "").strip()
-            if not text or weight(section) <= 0:
-                continue
             cost = len(text)
+            if budget < min_useful:
+                excerpt_dropped += 1
+                continue
             if cost > budget:
-                text = text[:budget]
-                cost = budget
+                # 在段落/句子边界切断，不要从半个单词中间切（见 _cut_at_boundary）
+                text = _cut_at_boundary(text, budget)
+                cost = len(text)
+                excerpt_dropped += 1
             if cost <= 0:
                 continue
             chosen.append({"path": section.get("path") or section.get("title"), "text": text})
             budget -= cost
-            if budget <= 0:
-                break
 
         # 按原始顺序输出。这一点不能省：提示缓存是**前缀匹配**，
         # 章节顺序若随优先级排序而变，两篇不同的调用会得到不同的前缀，
@@ -557,6 +612,11 @@ def build_paper_context(
             picked.append(f"### {table.get('path') or '表格'}\n{text}")
         if picked:
             parts.append("## 表格数据\n\n" + "\n\n".join(picked))
+
+    # 有内容没放进来就明确说一声。见 _EXCERPT_NOTE 的说明：
+    # 不说的话，模型会把「节选里没有」当成「论文没写」。
+    if excerpt_dropped:
+        parts.append(_EXCERPT_NOTE)
 
     return "\n\n".join(parts)
 
