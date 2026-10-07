@@ -96,7 +96,19 @@ def expand_query(query: str, *, provider=None, use_cache: bool = True) -> list[s
             response = provider.complete(
                 [{"role": "user", "content": query}],
                 system=EXPAND_SYSTEM,
-                max_tokens=2000,
+                # **这个额度必须给足，它决定扩展能不能出结果。**
+                #
+                # 实测（同一个问题连跑 6 次）：思考 6000~8700 字符，而推理型模型
+                # 的思考与正文**共用**这个额度。给 2000 时 4/6 次是
+                # `stop=max_tokens`、正文一个字都没有——扩展静默返回空。
+                #
+                # 后果被低估了很久：中文问句通向英文语料**只有扩展这一条路**
+                # （全文检索匹配不上，向量通道又被判为无区分度）。一次空扩展
+                # 等于这道题注定检索失败，而界面上只显示「没找到相关内容」。
+                #
+                # 更讽刺的是截断比成功**更贵**：4 次白跑的调用各烧 2000 token，
+                # 而一次成功的调用只花约 1500。
+                max_tokens=16000,
             )
         terms = _parse_terms(response.text)
     except Exception as exc:
@@ -279,7 +291,8 @@ def contextualize_query(
             response = provider.complete(
                 [{"role": "user", "content": "\n".join(lines) + f"\n\n追问：{question}"}],
                 system=CONTEXTUALIZE_SYSTEM,
-                max_tokens=1000,
+                # 同理：指代消解也要先思考再作答，1000 会被思考吃光
+                max_tokens=8000,
             )
         rewritten = _clean_rewrite(response.text)
     except Exception as exc:
