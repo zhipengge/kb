@@ -905,6 +905,58 @@ def notes_sync_view():
 # --------------------------------------------------------------------------
 
 
+@web_bp.get("/review")
+def review_page():
+    """待核清单：把散在 85 篇笔记里的 ⚠️ 收集起来处理。
+
+    笔记结尾印着「内容为草稿，需人工核对后再采信」，而 AI 自己也标出了不确定处——
+    问题是那些标记散在各自的 markdown 文件里，要看就得逐个打开，等于没有。
+    这个页面把它们聚起来，并按「谁的问题」分类：我们管线的账和论文自身的疑点
+    混在一起，人很快就不看了。
+    """
+    from ..services import review
+
+    kind = request.args.get("kind") or ""
+    show_done = request.args.get("show_done") == "1"
+
+    flags = review.collect(kinds=[kind] if kind in review.KIND_LABELS else None)
+    states = review.state_map([f.flag_id for f in flags])
+    for flag in flags:
+        flag.state = states.get(flag.flag_id, {}).get("state", "")
+        flag.comment = states.get(flag.flag_id, {}).get("comment", "")
+
+    pending = [f for f in flags if not f.state]
+    return render_template(
+        "review.html",
+        flags=flags if show_done else pending,
+        pending_count=len(pending),
+        total_count=len(flags),
+        stats=review.summary(flags),
+        kind_labels=review.KIND_LABELS,
+        kind=kind,
+        show_done=show_done,
+    )
+
+
+@web_bp.post("/review/<flag_id>")
+def review_mark(flag_id: str):
+    """标记/取消标记一条待核项。"""
+    from ..services import review
+
+    action = (request.form.get("action") or "done").strip()
+    if action == "undo":
+        review.unmark(flag_id)
+    else:
+        review.mark(
+            flag_id,
+            request.form.get("note_id") or "",
+            note_version=request.form.get("note_version", type=int) or 0,
+            state=review.STATE_IGNORED if action == "ignore" else review.STATE_DONE,
+            comment=request.form.get("comment") or "",
+        )
+    return redirect(url_for("web.review_page", **(request.args.to_dict() or {})))
+
+
 @web_bp.get("/tags")
 def tags_page():
     """标签词表与 AI 建议队列。"""

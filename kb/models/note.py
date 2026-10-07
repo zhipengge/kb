@@ -148,6 +148,36 @@ class NoteRevision(IdMixin, TimestampMixin, Base):
     __table_args__ = (UniqueConstraint("note_id", "version", name="uq_revision_note_version"),)
 
 
+class NoteFlagState(IdMixin, TimestampMixin, Base):
+    """一条待核项的处理状态。
+
+    待核项本身是**从笔记正文里现抽的**（见 services/review.py），不单独存一份——
+    存了就要同步，而笔记会被 AI 整个重写，同步迟早对不上。真正需要落盘的只有
+    「这一条我看过了」这个动作。
+
+    键用 ``flag_id``（笔记 id + 小节 + 正文的哈希），不用「第几条」：
+    笔记一重生成，编号全变，按编号记的状态会错位到别的条目上——那比丢掉状态更糟，
+    它会把一个没看过的问题显示成已处理。
+
+    笔记重写后旧的 flag_id 不再出现，那些行就成了垃圾。不主动清理：
+    它们只有几十字节，而「宁可留下无用的行，也不要误删一条有效状态」更划算。
+    """
+
+    __tablename__ = "note_flag_states"
+
+    flag_id: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, index=True)
+    note_id: Mapped[str] = mapped_column(
+        ForeignKey("notes.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # 记下处理时笔记是哪一版。笔记被重写后这个值会落后于 note.version，
+    # 界面上可以据此提示「这条是在旧版本上处理的」。
+    note_version: Mapped[int] = mapped_column(Integer, default=0)
+
+    # done=已核实/已处理，ignored=不打算处理
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="done", index=True)
+    comment: Mapped[str | None] = mapped_column(String(1024))
+
+
 __all__ = [
     "KINDS",
     "KIND_DEEP_READ",
@@ -155,5 +185,6 @@ __all__ = [
     "SOURCES",
     "STATUSES",
     "Note",
+    "NoteFlagState",
     "NoteRevision",
 ]

@@ -35,6 +35,7 @@ from .note import (
     KIND_MANUAL,
     KINDS,
     Note,
+    NoteFlagState,
     NoteRevision,
 )
 from .note import (
@@ -128,6 +129,7 @@ __all__ = [
     "LLMUsage",
     "Message",
     "Note",
+    "NoteFlagState",
     "NoteRevision",
     "NoteTag",
     "Paper",

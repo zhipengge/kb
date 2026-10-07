@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}待核清单 · 知识库{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>待核清单</h1>
+    <p>
+      笔记里 AI 自己标出「不确定」的地方。
+      <b>按谁的问题分类</b>——混在一起看，很快就会不看了。
+    </p>
+  </div>
+  <div class="btn-row">
+    <a class="btn" href="{{ url_for('web.review_page', show_done='1' if not show_done else None,
+                                     kind=kind or None) }}">
+      {{ '只看待处理' if show_done else '显示已处理' }}
+    </a>
+  </div>
+</div>
+
+<div class="grid grid-4" style="margin-bottom:var(--pad)">
+  <div class="card stat-card">
+    <div class="stat-value">{{ pending_count }}</div>
+    <div class="stat-label">待处理</div>
+  </div>
+  {% for key in ['paper', 'repro', 'other', 'unavailable'] %}
+    <div class="card stat-card">
+      <div class="stat-value">{{ stats.by_kind.get(key, 0) }}</div>
+      <div class="stat-label">{{ kind_labels.get(key, key) }}</div>
+      {% if key == 'unavailable' %}
+        <div class="small faint">提取没拿到，不是论文的问题</div>
+      {% endif %}
+    </div>
+  {% endfor %}
+</div>
+
+<nav class="tabs" style="margin-bottom:var(--pad-sm)">
+  <a class="tab {{ 'active' if not kind else '' }}"
+     href="{{ url_for('web.review_page', show_done='1' if show_done else None) }}">全部</a>
+  {% for key, label in kind_labels.items() %}
+    <a class="tab {{ 'active' if kind == key else '' }}"
+       href="{{ url_for('web.review_page', kind=key, show_done='1' if show_done else None) }}">
+      {{ label }} <span class="faint">{{ stats.by_kind.get(key, 0) }}</span>
+    </a>
+  {% endfor %}
+</nav>
+
+{% if not flags %}
+  <div class="card"><div class="empty">
+    {% if total_count and not show_done %}
+      这一类已经全部处理完了。其余类别见上方标签页。
+    {% else %}
+      没有待核项。笔记里出现 <span class="mono">⚠️ 待核</span> 时才会在这里列出。
+    {% endif %}
+  </div></div>
+{% else %}
+  {% set ns = namespace(last='') %}
+  {% for flag in flags %}
+    {% if flag.paper_title != ns.last %}
+      {% set ns.last = flag.paper_title %}
+      <h3 style="margin:var(--pad) 0 var(--pad-sm)">
+        {% if flag.paper_id %}
+          <a href="{{ url_for('web.paper_detail', paper_id=flag.paper_id) }}">{{ flag.paper_title or '（无标题）' }}</a>
+        {% else %}
+          {{ flag.note_title }}
+        {% endif %}
+      </h3>
+    {% endif %}
+    <div class="card" style="margin-bottom:6px; {{ 'opacity:.55' if flag.state else '' }}">
+      <div class="row" style="align-items:flex-start; gap:var(--pad-sm)">
+        <div style="flex:1; min-width:0">
+          <div class="small faint" style="margin-bottom:3px">
+            §{{ flag.section }}
+            <span class="badge">{{ flag.kind_label }}</span>
+            {% if flag.state %}<span class="badge badge-ok">已处理</span>{% endif %}
+          </div>
+          <div class="small">{{ flag.text }}</div>
+          {% if flag.comment %}<div class="small faint" style="margin-top:4px">备注：{{ flag.comment }}</div>{% endif %}
+        </div>
+        <form method="post" class="btn-row" style="flex:0 0 auto"
+              action="{{ url_for('web.review_mark', flag_id=flag.flag_id,
+                                 kind=kind or None, show_done='1' if show_done else None) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="note_id" value="{{ flag.note_id }}">
+          <input type="hidden" name="note_version" value="{{ flag.note_version }}">
+          {% if flag.state %}
+            <button class="btn btn-ghost" name="action" value="undo" type="submit">撤回</button>
+          {% else %}
+            <button class="btn" name="action" value="done" type="submit"
+                    title="看过并确认过了">已核实</button>
+            <button class="btn btn-ghost" name="action" value="ignore" type="submit"
+                    title="不打算处理（比如无关紧要）">忽略</button>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+  {% endfor %}
+{% endif %}
+{% endblock %}
