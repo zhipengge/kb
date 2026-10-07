@@ -252,6 +252,11 @@ pre {
 .page-head p { margin: 0; color: var(--text-muted); font-size: .93rem; }
 
 .grid { display: grid; gap: var(--pad); }
+/* **网格子项默认 `min-width: auto`，意味着它不能窄于内容的 min-content**。
+   卡片里放一张表格时，表格的 min-content 由最长的那个不可断行的单元格决定，
+   于是卡片被撑得比网格轨道还宽，整块布局溢出。
+   同一处理在 .wb-panel / .library-main / .msg-body 都出现过，这里统一给上。 */
+.grid > * { min-width: 0; }
 .grid-2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
 .grid-3 { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
 
@@ -277,8 +282,31 @@ pre {
 }
 .card-head h2, .card-head h3 { margin: 0; }
 
-.stat-card { display: flex; flex-direction: column; gap: 2px; }
-.stat-value { font-size: 1.75rem; font-weight: 680; line-height: 1.1; }
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* 让卡片成为尺寸查询容器——下面的字号按**卡片自身宽度**决定。
+     用视口宽度当代理是不行的：卡片宽度由网格决定，而网格的内容区上限是
+     1180px。在 1000~1100px 这一段，视口不算窄（按 vw 算出来的字号还很大），
+     但六张卡片恰好被压到最小列宽 152px、内容区只剩 120px——照样溢出。
+     按卡片宽度查询在每一档都对得上。 */
+  container-type: inline-size;
+}
+.stat-value {
+  font-size: 1.75rem;
+  font-weight: 680;
+  line-height: 1.1;
+  /* 兜底：万一某个字体把数字渲染得比估算更宽，宁可折成两行，
+     也不要横向溢出卡片。实测数字长度会随论文增多而增长。 */
+  overflow-wrap: anywhere;
+}
+/* 卡片被压窄时缩小字号。「1,595,096」这样的九字符数字在 1.75rem 下
+   需要约 116~139px（取决于字体），而窄卡片的内容区只有 118~120px——
+   处在「可能刚好、也可能溢出」的边缘。 */
+@container (max-width: 175px) {
+  .stat-value { font-size: 1.4rem; }
+}
 .stat-label { color: var(--text-muted); font-size: .88rem; }
 
 /* ==========================================================================
@@ -369,6 +397,35 @@ th { color: var(--text-muted); font-weight: 600; font-size: .84rem;
      text-transform: uppercase; letter-spacing: .03em; }
 tbody tr:hover { background: var(--bg-subtle); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* 单元格内的文字截断。
+ *
+ * **`.truncate` 单独放进表格里是不生效的**，这是最容易踩的一个坑：
+ * `text-overflow: ellipsis` 要求元素有一个**确定的宽度**，而 auto 布局的
+ * 表格列宽是由内容的 min-content 算出来的——`white-space: nowrap` 又让
+ * 「最小宽度」直接等于整段文字的宽度。两者一叠加，单元格不会截断，
+ * 而是把整个表格撑破，长标题就那么溢出到卡片外面（概览页「最近入库」
+ * 就是这么坏的：98 字符的标题需要约 715px，而卡片只给得出约 534px）。
+ *
+ * `table-layout: fixed` 把列宽改为由表格自身宽度决定，内容不再参与，
+ * 截断才真正发生。最后一列给 1% + nowrap：固定布局下这是「按内容收窄」
+ * 的标准写法，前面的列自动吃掉剩余宽度。
+ */
+.table-fixed { table-layout: fixed; }
+/* 末列固定宽度，首列吃掉剩余。
+ *
+ * **这里不能用 `width: 1%`**（那是 auto 布局下「按内容收窄」的惯用写法）。
+ * fixed 布局下百分比就是字面意义：1% 会得到大约 5px 宽的一列，
+ * 里面的徽章直接被压没。两种布局对同一句 CSS 的解释完全不同，很容易搞混。
+ * 给个确定的像素值，结果可以推理、不依赖浏览器的取舍。
+ *
+ * 只用在「首列弹性、末列是徽章或相对时间」的表上；
+ * 列数更多的表（如任务页）改为在 thead 上用百分比指定各列。
+ *
+ * 注意**不**给 td 加 overflow:hidden：截断发生在内层 .truncate 元素上
+ * （它的宽度现在由确定的列宽推出，省略号才生效），加在 td 上反而会裁掉
+ * 按钮的焦点轮廓。列宽够窄时内层元素自己会滚动/省略。 */
+.table-fixed td:last-child { width: 100px; white-space: nowrap; }
 
 /* ==========================================================================
    提示条

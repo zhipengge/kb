@@ -25,14 +25,18 @@
 
 <div class="card">
   {% if jobs %}
-    <table>
+    {# table-fixed：任务消息是 .truncate 的，而它只有在单元格宽度确定时才生效，
+       否则 nowrap 会把单元格的最小宽度撑成整段消息的宽度、把表格撑破。
+       列宽用百分比而不是像素——固定布局下它们是相对表格宽度的，窄屏跟着缩，
+       不会像像素值那样在手机上把某几列挤爆。第一列不设宽度，自动吃掉剩余。 #}
+    <table class="table-fixed">
       <thead>
         <tr>
           <th>任务</th>
-          <th>状态</th>
-          <th class="num">进度</th>
-          <th>创建时间</th>
-          <th class="num">操作</th>
+          <th style="width:13%">状态</th>
+          <th class="num" style="width:15%">进度</th>
+          <th style="width:13%">创建时间</th>
+          <th class="num" style="width:19%">操作</th>
         </tr>
       </thead>
       <tbody>

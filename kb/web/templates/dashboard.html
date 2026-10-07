@@ -135,7 +135,7 @@
       {% if active_jobs %}<span class="badge badge-info">{{ active_jobs|length }} 个任务进行中</span>{% endif %}
     </div>
     {% if recent_papers %}
-      <table>
+      <table class="table-fixed">
         <tbody>
         {% for paper in recent_papers %}
           <tr>
@@ -170,7 +170,7 @@
     </div>
     {% set shown = active_jobs or recent_jobs %}
     {% if shown %}
-      <table>
+      <table class="table-fixed">
         <tbody>
         {% for job in shown %}
           <tr>
